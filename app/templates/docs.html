@@ -5,18 +5,18 @@
 
 <div class="page-head">
   <div>
-    <div class="t">所有图档</div>
-    <div class="d">一个图档三个名字。搜任何一个都能命中——设计师问「M-2601-A 是啥」，把搜索框甩给他。</div>
+    <div class="t">图档列表</div>
+    <div class="d">同一图档可关联多个编号，任一编号均可检索。</div>
   </div>
   <div class="sp"></div>
-  <button class="btn primary" onclick="document.getElementById('newdoc').open=true">＋ 建图档</button>
+  <button class="btn primary" onclick="document.getElementById('newdoc').open=true">＋ 新建图档</button>
 </div>
 
 <details class="card" id="newdoc" style="margin-bottom:16px">
-  <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">＋ 建一张新图档</summary>
+  <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">＋ 新建图档</summary>
   <form method="post" action="/docs/new" style="padding:14px 16px 16px;border-top:1px solid var(--line2)">
     <div class="row">
-      <div><label class="fl">挂在哪张单上 *</label>
+      <div><label class="fl">所属订单 *</label>
         <select name="order_id" required>
           {% for o in orders_list %}<option value="{{ o.id }}">{{ o.code }} · {{ o.product_name }}</option>{% endfor %}
         </select></div>
@@ -26,11 +26,11 @@
     <div class="row" style="margin-top:10px">
       <div><label class="fl">类型</label>
         <select name="doc_type">{% for t in DOC_TYPES %}<option>{{ t }}</option>{% endfor %}</select></div>
-      <div><label class="fl">开模编号（工程部填，你可以先留空）</label><input type="text" name="mold_no" placeholder="M-2601-C"></div>
-      <div><label class="fl">其他叫法 / 客户料号</label><input type="text" name="aliases" placeholder="KL-8893, 卡扣件"></div>
+      <div><label class="fl">开模编号（由工程部填写，可暂留空）</label><input type="text" name="mold_no" placeholder="M-2601-C"></div>
+      <div><label class="fl">别名 / 客户料号</label><input type="text" name="aliases" placeholder="KL-8893, 卡扣件"></div>
     </div>
     <div class="field" style="margin-top:10px"><label class="fl">备注</label><input type="text" name="note"></div>
-    <button class="btn primary" type="submit">建好，接着传第一版</button>
+    <button class="btn primary" type="submit">创建并上传首版</button>
   </form>
 </details>
 
@@ -46,7 +46,7 @@
     <table>
       <thead><tr>
         <th>图档</th><th style="width:150px">设计编号</th><th style="width:120px">开模编号</th>
-        <th style="width:130px">客户料号 / 别名</th><th style="width:96px">当前版本</th>
+        <th style="width:130px">客户料号 / 别名</th><th style="width:112px">当前版本</th>
         <th style="width:88px">客户确认</th><th style="width:56px" class="mid">版本</th>
       </tr></thead>
       <tbody>
@@ -56,12 +56,12 @@
             <div class="xs dim">{{ d.doc_type }} · {{ d.order_code or '未挂单' }}</div></td>
           <td class="mono" style="font-size:12px">{{ d.design_no }}</td>
           <td class="mono" style="font-size:12px">
-            {% if d.mold_no %}{{ d.mold_no }}{% else %}<span class="dim">待工程部</span>{% endif %}</td>
+            {% if d.mold_no %}{{ d.mold_no }}{% else %}<span class="dim">待工程部填写</span>{% endif %}</td>
           <td class="xs dim">{{ d.aliases or '—' }}</td>
           <td>
             {% if d.ver %}<span class="mono" style="color:var(--teal);font-weight:700">v{{ d.ver.version_no }}</span>
               <span class="pill p-{{ d.ver.status }}">{{ VER_STATUS.get(d.ver.status) }}</span>
-            {% else %}<span class="tag">无正式版</span>{% endif %}
+            {% else %}<span class="tag">暂无正式版</span>{% endif %}
           </td>
           <td>{% if d.ver and d.ver.customer_confirmed %}
               <span class="tag" style="background:#faf5ff;color:#7e22ce;border-color:#e9d5ff">已确认</span>
@@ -69,7 +69,7 @@
           <td class="mid sm">{{ d.n_ver }}</td>
         </tr>
       {% endfor %}
-      {% if not rows %}<tr><td colspan="7"><div class="empty"><div class="big">◫</div>没有匹配的图档</div></td></tr>{% endif %}
+      {% if not rows %}<tr><td colspan="7"><div class="empty"><div class="big">◫</div>无匹配图档</div></td></tr>{% endif %}
       </tbody>
     </table>
   </div>

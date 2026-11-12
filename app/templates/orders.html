@@ -5,15 +5,15 @@
 
 <div class="page-head">
   <div>
-    <div class="t">所有订单</div>
-    <div class="d">一张单从头走到尾，进度就在环节条上</div>
+    <div class="t">订单列表</div>
+    <div class="d">订单全流程进度显示于环节条</div>
   </div>
   <div class="sp"></div>
-  <button class="btn primary" onclick="document.getElementById('neworder').open=true">＋ 接单</button>
+  <button class="btn primary" onclick="document.getElementById('neworder').open=true">＋ 新建订单</button>
 </div>
 
 <details class="card" id="neworder" style="margin-bottom:16px">
-  <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">＋ 新接一张单</summary>
+  <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">＋ 新建订单</summary>
   <form method="post" action="/orders/new" style="padding:0 16px 16px;border-top:1px solid var(--line2)">
     <div class="row" style="margin-top:14px">
       <div><label class="fl">客户</label><input type="text" name="customer_name" placeholder="宏昌实业"></div>
@@ -21,11 +21,11 @@
       <div><label class="fl">交期</label><input type="date" name="due_date"></div>
     </div>
     <div class="field" style="margin-top:10px">
-      <label class="fl">客户到底要什么（越具体，后面扯皮越少）</label>
-      <textarea name="requirements" placeholder="外观件，A 面高光；卡扣要能一次脱模；材质 ABS+PC；客户已给 3D 和 2D 各一份。"></textarea>
-      <div class="hintline">业务员不写清楚，后面每个人都要来问你一遍。这一栏就是拿来堵这个洞的。</div>
+      <label class="fl">客户需求（描述越具体，后续争议越少）</label>
+      <textarea name="requirements" placeholder="外观件，A 面高光；卡扣结构需一次脱模；材质 ABS+PC；客户已提供 3D 与 2D 文件各一份。"></textarea>
+      <div class="hintline">需求描述不清将导致后续环节反复确认，请在此填写完整。</div>
     </div>
-    <button class="btn primary" type="submit">建单</button>
+    <button class="btn primary" type="submit">创建订单</button>
   </form>
 </details>
 
@@ -40,7 +40,7 @@
   <div class="bd tight">
     <table>
       <thead><tr>
-        <th style="width:126px">单号</th><th>产品 / 客户</th><th style="width:150px">现在在谁手上</th>
+        <th style="width:126px">单号</th><th>产品 / 客户</th><th style="width:150px">当前环节</th>
         <th class="mid" style="width:62px">图档</th><th class="mid" style="width:62px">BOM</th>
         <th style="width:96px">交期</th><th style="width:110px">最近更新</th>
       </tr></thead>
@@ -60,7 +60,7 @@
         </tr>
       {% endfor %}
       {% if not rows %}
-        <tr><td colspan="7"><div class="empty"><div class="big">▤</div>这个环节没有单子</div></td></tr>
+        <tr><td colspan="7"><div class="empty"><div class="big">▤</div>该环节暂无订单</div></td></tr>
       {% endif %}
       </tbody>
     </table>

@@ -5,31 +5,31 @@
 
 <div class="page-head">
   <div>
-    <div class="t">{{ me.name }}，今天该你做的事在下面</div>
+    <div class="t">{{ me.name }}，以下为今日待办</div>
     <div class="d">{{ DEPTS.get(me.dept, me.dept) }}
-      {%- if me.role == 'manager' %} · 主管，本部门交接单由你批{% elif me.role == 'admin' %} · 管理员{% endif %}
-      · 你只看到跟你有关的单子</div>
+      {%- if me.role == 'manager' %} · 主管，负责本部门交接单审批{% elif me.role == 'admin' %} · 管理员{% endif %}
+      · {% if me.role == 'admin' %}显示全部订单{% else %}仅显示本部门相关订单{% endif %}</div>
   </div>
   {% if me.role in ('admin', 'manager') %}
-  <div class="right"><a class="btn sm primary" href="/board">打开总看板 ›</a></div>
+  <div class="right"><a class="btn sm primary" href="/board">查看总看板 ›</a></div>
   {% endif %}
 </div>
 
 <div class="grid g4" style="margin-bottom:18px">
-  <div class="stat teal"><div class="k">在跑的订单</div><div class="v">{{ stats.orders }}</div><div class="f">结案的不算</div></div>
-  <div class="stat"><div class="k">图档总数</div><div class="v">{{ stats.docs }}</div><div class="f">每张都有版本历史</div></div>
-  <div class="stat warn"><div class="k">等审批的交接</div><div class="v">{{ stats.pending }}</div><div class="f">卡在主管这一关</div></div>
-  <div class="stat"><div class="k">草稿版本</div><div class="v">{{ stats.draft }}</div><div class="f">还没进交接单，不算正式版</div></div>
+  <div class="stat teal"><div class="k">进行中订单</div><div class="v">{{ stats.orders }}</div><div class="f">不含已结案订单</div></div>
+  <div class="stat"><div class="k">图档总数</div><div class="v">{{ stats.docs }}</div><div class="f">均保留完整版本历史</div></div>
+  <div class="stat warn"><div class="k">待审批交接单</div><div class="v">{{ stats.pending }}</div><div class="f">等待主管审批</div></div>
+  <div class="stat"><div class="k">草稿版本</div><div class="v">{{ stats.draft }}</div><div class="f">尚未纳入交接单，非正式版本</div></div>
 </div>
 
 <div class="grid g21">
   <div class="card">
-    <div class="hd"><h3>该我做的事</h3><div class="sp"></div>
-      <span class="hint">按紧急程度排，处理完自动消失</span></div>
+    <div class="hd"><h3>我的待办</h3><div class="sp"></div>
+      <span class="hint">按紧急程度排序，处理完成后自动移除</span></div>
     <div class="bd" style="padding:0">
 
       {% if todo_approve %}
-      <div style="padding:11px 16px 4px;font-size:11.5px;color:#b45309;font-weight:650;letter-spacing:.04em">① 等我审批（{{ todo_approve|length }}）</div>
+      <div style="padding:11px 16px 4px;font-size:11.5px;color:#b45309;font-weight:650;letter-spacing:.04em">① 待我审批（{{ todo_approve|length }}）</div>
       {% for h in todo_approve %}
       <div style="display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line2)">
         <span class="pill p-pending">待审批</span>
@@ -38,48 +38,48 @@
             <span class="dim">·</span> {{ h.order_code }} {{ h.product_name }}</div>
           <div class="xs dim">{{ stage(h.from_stage).name }} → {{ stage(h.to_stage).name }} · {{ h.submitter_name }} 提交 · {{ h.submitted_at[:16] }}</div>
         </div>
-        <a class="btn sm primary" href="/handovers/{{ h.id }}">去批</a>
+        <a class="btn sm primary" href="/handovers/{{ h.id }}">审批</a>
       </div>
       {% endfor %}
       {% endif %}
 
       {% if todo_accept %}
-      <div style="padding:11px 16px 4px;font-size:11.5px;color:#1d4ed8;font-weight:650;letter-spacing:.04em">② 等我签收（{{ todo_accept|length }}）</div>
+      <div style="padding:11px 16px 4px;font-size:11.5px;color:#1d4ed8;font-weight:650;letter-spacing:.04em">② 待我签收（{{ todo_accept|length }}）</div>
       {% for o in todo_accept %}
       <div style="display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line2)">
         <span class="pill p-approved">待签收</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px"><a href="/handovers/{{ o.ho.id }}">{{ o.ho.code }}</a>
             <span class="dim">·</span> {{ o.code }} {{ o.product_name }}</div>
-          <div class="xs dim">上一环 {{ stage(o.ho.from_stage).name }} 已批，签了才算到你这</div>
+          <div class="xs dim">上一环节 {{ stage(o.ho.from_stage).name }} 已审批，签收后进入本环节</div>
         </div>
-        <a class="btn sm primary" href="/handovers/{{ o.ho.id }}">去签收</a>
+        <a class="btn sm primary" href="/handovers/{{ o.ho.id }}">签收</a>
       </div>
       {% endfor %}
       {% endif %}
 
       {% if todo_submit %}
-      <div style="padding:11px 16px 4px;font-size:11.5px;color:#0f766e;font-weight:650;letter-spacing:.04em">③ 等我做完交出（{{ todo_submit|length }}）</div>
+      <div style="padding:11px 16px 4px;font-size:11.5px;color:#0f766e;font-weight:650;letter-spacing:.04em">③ 待我提交（{{ todo_submit|length }}）</div>
       {% for o in todo_submit %}
       <div style="display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line2)">
-        <span class="pill p-current">第{{ o.stage_info.no }}环</span>
+        <span class="pill p-current">第 {{ o.stage_info.no }} 环</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px"><a href="/orders/{{ o.id }}">{{ o.code }}</a> {{ o.product_name }}</div>
           <div class="xs dim">{{ o.stage_info.name }} · {{ o.stage_info.do }} · 交期 {{ o.due_date or '未定' }}</div>
         </div>
-        <a class="btn sm" href="/orders/{{ o.id }}">去处理</a>
+        <a class="btn sm" href="/orders/{{ o.id }}">处理</a>
       </div>
       {% endfor %}
       {% endif %}
 
       {% if not (todo_approve or todo_accept or todo_submit) %}
-      <div class="empty"><div class="big">✓</div>手上没事了。<br><span class="xs">别人推进度的时候，你会在这里收到提醒。</span></div>
+      <div class="empty"><div class="big">✓</div>暂无待办事项<br><span class="xs">其他环节推进时，此处将显示提醒。</span></div>
       {% endif %}
     </div>
   </div>
 
   <div class="card">
-    <div class="hd"><h3>最近动静</h3><div class="sp"></div><a class="hint" href="/activity">全部 ›</a></div>
+    <div class="hd"><h3>最近动态</h3><div class="sp"></div><a class="hint" href="/activity">全部 ›</a></div>
     <div class="bd">
       {% if recent %}
       <ul class="tl">
@@ -92,7 +92,7 @@
         </li>
         {% endfor %}
       </ul>
-      {% else %}<div class="empty xs">还没有记录</div>{% endif %}
+      {% else %}<div class="empty xs">暂无记录</div>{% endif %}
     </div>
   </div>
 </div>

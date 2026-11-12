@@ -6,14 +6,14 @@
 <div class="page-head">
   <div>
     <div class="t">交接单</div>
-    <div class="d">每道门都是一张单：提交 → 主管审批 → 对方签收。卡在谁手上，一眼可见。</div>
+    <div class="d">每次流转生成一张交接单：提交 → 主管审批 → 下一环节签收。</div>
   </div>
 </div>
 
 <div class="flexr" style="margin-bottom:12px;gap:6px">
   <a class="btn sm {{ 'primary' if tab == 'all' }}" href="/handovers">全部</a>
-  <a class="btn sm {{ 'primary' if tab == 'todo' }}" href="/handovers?tab=todo">该我处理的</a>
-  <a class="btn sm {{ 'primary' if tab == 'mine' }}" href="/handovers?tab=mine">我提的</a>
+  <a class="btn sm {{ 'primary' if tab == 'todo' }}" href="/handovers?tab=todo">待我处理</a>
+  <a class="btn sm {{ 'primary' if tab == 'mine' }}" href="/handovers?tab=mine">我提交的</a>
 </div>
 
 <div class="card">
@@ -22,13 +22,13 @@
       <thead><tr>
         <th style="width:90px">单号</th><th style="width:150px">订单</th><th>流转</th>
         <th style="width:104px">状态</th><th class="mid" style="width:52px">附件</th>
-        <th style="width:150px">谁在什么时候</th><th style="width:70px"></th>
+        <th style="width:150px">处理人与时间</th><th style="width:70px"></th>
       </tr></thead>
       <tbody>
       {% for h in rows %}
         <tr>
           <td><a href="/handovers/{{ h.id }}" class="mono xs">{{ h.code }}</a>
-            {% if h.round > 1 %}<div class="xs dim">第{{ h.round}}轮</div>{% endif %}</td>
+            {% if h.round > 1 %}<div class="xs dim">第 {{ h.round }} 轮</div>{% endif %}</td>
           <td class="sm">{{ h.product_name }}<div class="xs dim mono">{{ h.order_code }}</div></td>
           <td class="sm">
             <span class="tag dept-{{ h.from_info.dept }}">{{ h.from_info.name }}</span>
@@ -42,10 +42,10 @@
             {% if h.approver_name %}<br>{{ h.approver_name }} 批 {{ h.approved_at[5:16] if h.approved_at else '' }}{% endif %}
             {% if h.receiver_name %}<br>{{ h.receiver_name }} 收 {{ h.received_at[5:16] if h.received_at else '' }}{% endif %}
           </td>
-          <td><a class="btn sm" href="/handovers/{{ h.id }}">打开</a></td>
+          <td><a class="btn sm" href="/handovers/{{ h.id }}">查看</a></td>
         </tr>
       {% endfor %}
-      {% if not rows %}<tr><td colspan="7"><div class="empty"><div class="big">⇄</div>这里还没有单子</div></td></tr>{% endif %}
+      {% if not rows %}<tr><td colspan="7"><div class="empty"><div class="big">⇄</div>暂无交接单</div></td></tr>{% endif %}
       </tbody>
     </table>
   </div>

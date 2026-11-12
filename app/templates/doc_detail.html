@@ -9,7 +9,7 @@
     <div class="d">
       <span class="mono" style="color:var(--teal)">{{ d.design_no }}</span>
       {% if d.mold_no %} · 开模 <span class="mono">{{ d.mold_no }}</span>{% endif %}
-      {% if d.aliases %} · 也叫 {{ d.aliases }}{% endif %}
+      {% if d.aliases %} · 别名 {{ d.aliases }}{% endif %}
       {% if o %} · <a href="/orders/{{ o.id }}">{{ o.code }}</a>{% endif %}
     </div>
   </div>
@@ -21,13 +21,13 @@
   <div>
     <div class="card">
       <div class="hd"><h3>版本历史</h3><div class="sp"></div>
-        <span class="hint">旧的永不覆盖，只能新增</span></div>
+        <span class="hint">历史版本不会被覆盖，仅可新增</span></div>
       <div class="bd">
         {% for v in vers %}
         <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line2)">
-          <div style="flex:0 0 44px">
+          <div style="flex:0 0 54px">
             <div class="mono" style="font-size:17px;font-weight:700;color:{{ 'var(--teal)' if d.current_version_id == v.id else 'var(--faint)' }}">v{{ v.version_no }}</div>
-            {% if d.current_version_id == v.id %}<div class="xs" style="color:var(--teal)">当前版</div>{% endif %}
+            {% if d.current_version_id == v.id %}<div class="xs nowrap" style="color:var(--teal)">当前版本</div>{% endif %}
           </div>
           <div style="flex:1;min-width:0">
             <div class="flexr" style="flex-wrap:wrap">
@@ -35,22 +35,22 @@
               {% if v.customer_confirmed %}<span class="tag" style="background:#faf5ff;color:#7e22ce;border-color:#e9d5ff">客户已确认 {{ v.customer_confirmed_by }}</span>{% endif %}
               <span class="xs dim">{{ v.uploaded_by_name }} 传于 {{ v.uploaded_at[:16] }}</span>
             </div>
-            <div class="sm" style="margin-top:5px;color:var(--ink2)">{{ v.change_note or '（没写改了什么）' }}</div>
+            <div class="sm" style="margin-top:5px;color:var(--ink2)">{{ v.change_note or '（未填写变更说明）' }}</div>
             <div class="xs dim" style="margin-top:4px">
               <span class="mono">{{ v.file_name }}</span> · {{ (v.size / 1024) | round(1) }} KB
               · <a href="/files/{{ v.stored_name }}">下载</a>
               {% if v.published_by_name %} · {{ v.published_by_name }} 批于 {{ v.published_at[:16] }}{% endif %}
             </div>
-            {% if v.customer_confirm_note %}<div class="xs" style="color:#7e22ce;margin-top:3px">客户原话：{{ v.customer_confirm_note }}</div>{% endif %}
+            {% if v.customer_confirm_note %}<div class="xs" style="color:#7e22ce;margin-top:3px">客户确认说明：{{ v.customer_confirm_note }}</div>{% endif %}
 
             {% if me.dept in ('sales','manage') or me.role == 'admin' %}
               {% if not v.customer_confirmed %}
               <details style="margin-top:6px">
-                <summary>客户确认了？记一笔</summary>
+                <summary>登记客户确认</summary>
                 <form method="post" action="/versions/{{ v.id }}/customer" style="margin-top:6px">
-                  <input type="text" name="note" placeholder="例：微信确认，客户说「就这样开模」" style="margin-bottom:6px">
+                  <input type="text" name="note" placeholder="例：微信确认，客户同意按此版本开模" style="margin-bottom:6px">
                   <button class="btn sm primary" type="submit">标记客户已确认</button>
-                  <span class="xs dim" style="margin-left:6px">主管批过 ≠ 客户认了，这一票单独记</span>
+                  <span class="xs dim" style="margin-left:6px">主管审批不等同于客户确认，此项单独记录</span>
                 </form>
               </details>
               {% endif %}
@@ -58,27 +58,27 @@
           </div>
         </div>
         {% endfor %}
-        {% if not vers %}<div class="empty xs">还没有版本，传第一版吧</div>{% endif %}
+        {% if not vers %}<div class="empty xs">暂无版本，请上传首版</div>{% endif %}
       </div>
     </div>
 
     <div class="card" style="margin-top:16px">
-      <div class="hd"><h3>传新版本</h3><div class="sp"></div>
-        <span class="hint">传上来是草稿，挂交接单批过才算正式版</span></div>
+      <div class="hd"><h3>上传新版本</h3><div class="sp"></div>
+        <span class="hint">上传后为草稿状态，经交接单审批后转为正式版本</span></div>
       <form method="post" action="/docs/{{ d.id }}/upload" enctype="multipart/form-data" class="bd">
         <div class="row">
-          <div style="flex:2 1 240px"><label class="fl">文件（.prt / .step / .dwg / .pdf / 图片都行）</label>
+          <div style="flex:2 1 240px"><label class="fl">文件（支持 .prt / .step / .dwg / .pdf / 图片）</label>
             <input type="file" name="file" required></div>
-          <div style="flex:1 1 160px"><label class="fl">对应哪张变更单（可选）</label>
+          <div style="flex:1 1 160px"><label class="fl">关联变更单（可选）</label>
             <select name="change_id">
               <option value="">—</option>
               {% for c in changes %}<option value="{{ c.id }}">{{ c.code }} {{ c.title }}</option>{% endfor %}
             </select></div>
         </div>
         <div class="field" style="margin-top:10px">
-          <label class="fl">这一版改了什么 *</label>
-          <textarea name="change_note" placeholder="例：按 BG-0002 把 A 面改成细火花纹，其余不变。"></textarea>
-          <div class="hintline">以后有人问「为什么改成这样」，答案在这里，不在微信群里。</div>
+          <label class="fl">本次变更说明 *</label>
+          <textarea name="change_note" placeholder="例：按 BG-0002 将 A 面改为细火花纹，其余不变。"></textarea>
+          <div class="hintline">变更原因记录于此，便于后续追溯。</div>
         </div>
         <button class="btn primary" type="submit">上传</button>
       </form>
@@ -87,28 +87,28 @@
 
   <div>
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>三个编号</h3></div>
+      <div class="hd"><h3>编号信息</h3></div>
       <div class="bd">
         <form method="post" action="/docs/{{ d.id }}/update">
-          <div class="field"><label class="fl">设计编号（你编的，改不了）</label>
+          <div class="field"><label class="fl">设计编号（创建后不可修改）</label>
             <input type="text" value="{{ d.design_no }}" disabled style="background:#f8fafc"></div>
-          <div class="field"><label class="fl">开模编号（工程部编）</label>
+          <div class="field"><label class="fl">开模编号（由工程部填写）</label>
             <input type="text" name="mold_no" value="{{ d.mold_no or '' }}" placeholder="M-2601-A"
               {{ 'disabled' if me.dept != 'engineering' and me.role not in ('manager','admin') }}></div>
-          <div class="field"><label class="fl">其他叫法 / 客户料号</label>
+          <div class="field"><label class="fl">别名 / 客户料号</label>
             <input type="text" name="aliases" value="{{ d.aliases or '' }}"></div>
           <input type="hidden" name="title" value="{{ d.title }}">
           {% if me.dept == 'engineering' or me.role in ('manager','admin') %}
           <button class="btn sm primary" type="submit">保存</button>
           {% else %}
-          <div class="xs dim">开模编号归工程部录——谁编的号谁录，这样才追得到源头。</div>
+          <div class="xs dim">开模编号由工程部录入，确保编号来源可追溯。</div>
           {% endif %}
         </form>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>被哪些交接单带上过</h3></div>
+      <div class="hd"><h3>关联交接单</h3></div>
       <div class="bd">
         {% if in_ho %}
         <ul class="tl">
@@ -118,12 +118,12 @@
               <span class="pill p-{{ h.status }}">{{ HO_STATUS.get(h.status) }}</span></span></li>
           {% endfor %}
         </ul>
-        {% else %}<div class="xs dim">还没被交出去过</div>{% endif %}
+        {% else %}<div class="xs dim">暂无交接记录</div>{% endif %}
       </div>
     </div>
 
     <div class="card">
-      <div class="hd"><h3>跟这张图有关的变更</h3></div>
+      <div class="hd"><h3>关联变更单</h3></div>
       <div class="bd">
         {% if changes %}
           {% for c in changes %}
@@ -132,7 +132,7 @@
             <div class="xs dim">{{ CHANGE_STATUS.get(c.status) }} · {{ c.decided_by_name or '待裁定' }}</div>
           </div>
           {% endfor %}
-        {% else %}<div class="xs dim">没有</div>{% endif %}
+        {% else %}<div class="xs dim">暂无</div>{% endif %}
       </div>
     </div>
   </div>

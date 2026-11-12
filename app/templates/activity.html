@@ -1,23 +1,23 @@
 {% extends "base.html" %}
-{% block title %}动态{% endblock %}
-{% block head %}动态{% endblock %}
+{% block title %}操作日志{% endblock %}
+{% block head %}操作日志{% endblock %}
 {% block content %}
 
 <div class="page-head">
   <div>
-    <div class="t">全公司操作流水</div>
-    <div class="d">谁在什么时候干了什么。图改了几版、谁批的、谁签的，全在这儿。</div>
+    <div class="t">操作日志</div>
+    <div class="d">记录系统内全部操作，包括图档版本变更、审批与签收记录。</div>
   </div>
 </div>
 
 <form method="get" action="/activity" class="flexr" style="margin-bottom:14px;gap:8px;flex-wrap:wrap">
-  <input type="text" name="q" value="{{ q }}" placeholder="搜内容，比如 UG-2601 或 卡扣" style="max-width:260px">
+  <input type="text" name="q" value="{{ q }}" placeholder="搜索内容，如 UG-2601 或 卡扣" style="max-width:260px">
   <select name="actor" style="max-width:150px">
-    <option value="">所有人</option>
+    <option value="">全部人员</option>
     {% for p in people %}<option {{ 'selected' if actor == p }}>{{ p }}</option>{% endfor %}
   </select>
-  <button class="btn" type="submit">筛</button>
-  {% if q or actor %}<a class="btn ghost" href="/activity">清掉</a>{% endif %}
+  <button class="btn" type="submit">筛选</button>
+  {% if q or actor %}<a class="btn ghost" href="/activity">清除条件</a>{% endif %}
 </form>
 
 <div class="card">
@@ -30,10 +30,10 @@
           <span class="a">{{ r.actor_name }}</span> <span class="d">{{ r.action }}</span>
           <div class="xs dim">{{ r.detail }}</div>
         </span>
-        {% if r.order_id %}<a class="xs" href="/orders/{{ r.order_id }}">看单 ›</a>{% endif %}
+        {% if r.order_id %}<a class="xs" href="/orders/{{ r.order_id }}">查看订单 ›</a>{% endif %}
       </li>
       {% endfor %}
-      {% if not rows %}<div class="empty xs">没有记录</div>{% endif %}
+      {% if not rows %}<div class="empty xs">暂无记录</div>{% endif %}
     </ul>
   </div>
 </div>

@@ -6,11 +6,11 @@
 <div class="page-head">
   <div>
     <div class="t">{{ o.product_name }}</div>
-    <div class="d">{{ o.customer_name or '没写客户' }} · 业务 {{ o.sales_name or '—' }} · 交期 {{ o.due_date or '未定' }}
+    <div class="d">{{ o.customer_name or '未填写客户' }} · 业务 {{ o.sales_name or '—' }} · 交期 {{ o.due_date or '未定' }}
       {% if o.status == 'closed' %}<span class="tag" style="margin-left:6px">已结案</span>{% endif %}</div>
   </div>
   <div class="sp"></div>
-  <a class="btn" href="/bom/{{ o.id }}">看 BOM（{{ bom|length }} 行）</a>
+  <a class="btn" href="/bom/{{ o.id }}">查看 BOM（{{ bom|length }} 行）</a>
   {% if can_submit %}
   <button class="btn primary" onclick="document.getElementById('submitbox').open=true">提交交接单</button>
   {% endif %}
@@ -24,7 +24,7 @@
       <span class="xs dim">{{ cur.do }}</span>
       <div class="sp"></div>
       {% if o.status == 'active' and me.role in ('manager','admin') %}
-      <form method="post" action="/orders/{{ o.id }}/close" onsubmit="return confirm('确认结案？结案后不再出现在待办里。')">
+      <form method="post" action="/orders/{{ o.id }}/close" onsubmit="return confirm('确认结案？结案后不再出现在待办列表中。')">
         <button class="btn sm ghost" type="submit">结案</button>
       </form>
       {% endif %}
@@ -34,7 +34,7 @@
       <div class="step {{ s.state }}">
         <div class="dot"></div><div class="bar"></div>
         <div class="lb">{{ '%02d'|format(s.info.no) }} {{ s.info.name }}</div>
-        <div class="dt">{{ s.at[5:10] if s.at else ('现在' if s.state=='now' else '—') }}</div>
+        <div class="dt">{{ s.at[5:10] if s.at else ('当前' if s.state=='now' else '—') }}</div>
       </div>
       {% endfor %}
     </div>
@@ -45,12 +45,12 @@
 <details class="card" id="submitbox" style="margin-bottom:16px" {{ 'open' if not docs }}>
   <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">
     提交交接单：{{ cur.name }} → {{ stage(cur.no + 1).name if cur.no < 7 else '（已是最后一环）' }}
-    <span class="xs dim" style="font-weight:400"> · 勾上这次要交出去的版本，主管批过才算正式发布</span>
+    <span class="xs dim" style="font-weight:400"> · 勾选本次提交的版本，经主管审批后转为正式发布</span>
   </summary>
   <form method="post" action="/handovers/new" style="padding:14px 16px 18px;border-top:1px solid var(--line2)">
     <input type="hidden" name="order_id" value="{{ o.id }}">
 
-    <label class="fl">这次交哪些版本</label>
+    <label class="fl">本次提交的版本</label>
     {% if docs %}
       {% for d in docs %}
         {% if d.versions %}
@@ -75,23 +75,23 @@
         {% endif %}
       {% endfor %}
     {% else %}
-      <div class="xs dim" style="margin-bottom:8px">这单还没有图档，先去<a href="/docs">图档</a>页建一张。</div>
+      <div class="xs dim" style="margin-bottom:8px">本订单暂无图档，请先前往<a href="/docs">图档</a>页创建。</div>
     {% endif %}
 
     {% if bom %}
     <label class="checkline" style="margin:10px 0">
       <input type="checkbox" name="include_bom" checked>
-      附上当前 BOM（第 {{ o.bom_rev }} 版，{{ bom|length }} 行，{{ lamps.warn }} 黄 {{ lamps.bad }} 红）
+      附带当前 BOM（第 {{ o.bom_rev }} 版，{{ bom|length }} 行，缺图 {{ lamps.warn }}，未发布 {{ lamps.bad }}）
     </label>
     {% endif %}
 
     <div class="field" style="margin-top:10px">
-      <label class="fl">一句话说明这一环做完了什么 *</label>
-      <textarea name="note" required placeholder="例：结构 3D 完成，分模按 1 出 2，卡扣改薄到 1.2mm；镶件位置待模具部确认。"></textarea>
-      <div class="hintline">你写这句，是给下一环和以后翻旧账的人看的。别写「已完成」。</div>
+      <label class="fl">本环节完成情况说明 *</label>
+      <textarea name="note" required placeholder="例：结构 3D 已完成，分模按 1 出 2，卡扣壁厚改为 1.2mm；镶件位置待模具部确认。"></textarea>
+      <div class="hintline">该说明将作为下一环节的交接依据并留档，请写明具体完成内容。</div>
     </div>
-    <button class="btn primary" type="submit">提交，等主管审批</button>
-    <span class="xs dim" style="margin-left:8px">批过之后对方签收，这一单才算走到下一环</span>
+    <button class="btn primary" type="submit">提交审批</button>
+    <span class="xs dim" style="margin-left:8px">审批通过并由下一环节签收后，订单进入下一环节</span>
   </form>
 </details>
 {% endif %}
@@ -100,11 +100,11 @@
   <div>
     <div class="card" style="margin-bottom:16px">
       <div class="hd"><h3>交接记录</h3><div class="sp"></div>
-        <span class="hint">每道门都要主管批、对方签</span></div>
+        <span class="hint">每次流转均需主管审批与下一环节签收</span></div>
       <div class="bd tight">
         <table>
           <thead><tr><th style="width:82px">单号</th><th>流转</th><th style="width:96px">状态</th>
-            <th style="width:150px">谁在什么时候</th></tr></thead>
+            <th style="width:150px">处理人与时间</th></tr></thead>
           <tbody>
           {% for h in handovers %}
             <tr>
@@ -120,24 +120,24 @@
               </td>
             </tr>
           {% endfor %}
-          {% if not handovers %}<tr><td colspan="4"><div class="empty xs">还没提过交接单</div></td></tr>{% endif %}
+          {% if not handovers %}<tr><td colspan="4"><div class="empty xs">暂无交接单</div></td></tr>{% endif %}
           </tbody>
         </table>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>这单的图档</h3><div class="sp"></div>
-        <span class="hint">设计编号 / 开模编号 / 客户料号 一起显示</span></div>
+      <div class="hd"><h3>本订单图档</h3><div class="sp"></div>
+        <span class="hint">同时显示设计编号、开模编号与客户料号</span></div>
       <div class="bd tight">
         <table>
-          <thead><tr><th>图档</th><th style="width:160px">编号</th><th style="width:96px">当前版本</th>
+          <thead><tr><th>图档</th><th style="width:160px">编号</th><th style="width:112px">当前版本</th>
             <th style="width:80px">客户确认</th></tr></thead>
           <tbody>
           {% for d in docs %}
             <tr>
               <td><a href="/docs/{{ d.id }}"><b>{{ d.title }}</b></a>
-                <div class="xs dim">{{ d.doc_type }}{% if d.aliases %} · 也叫 {{ d.aliases }}{% endif %}</div></td>
+                <div class="xs dim">{{ d.doc_type }}{% if d.aliases %} · 别名 {{ d.aliases }}{% endif %}</div></td>
               <td class="xs nowrap">
                 <div class="mono">{{ d.design_no }}</div>
                 {% if d.mold_no %}<div class="mono dim">{{ d.mold_no }}</div>{% endif %}
@@ -146,7 +146,7 @@
                 {% if d.ver %}
                   <span class="mono" style="color:var(--teal);font-weight:700">v{{ d.ver.version_no }}</span>
                   <span class="pill p-{{ d.ver.status }}">{{ VER_STATUS.get(d.ver.status) }}</span>
-                {% else %}<span class="tag">还没有正式版</span>{% endif %}
+                {% else %}<span class="tag">暂无正式版</span>{% endif %}
                 <div class="xs dim">{{ d.n_ver }} 个版本</div>
               </td>
               <td>
@@ -156,7 +156,7 @@
               </td>
             </tr>
           {% endfor %}
-          {% if not docs %}<tr><td colspan="4"><div class="empty xs">还没有图档</div></td></tr>{% endif %}
+          {% if not docs %}<tr><td colspan="4"><div class="empty xs">暂无图档</div></td></tr>{% endif %}
           </tbody>
         </table>
       </div>
@@ -166,21 +166,21 @@
       <div class="hd"><h3>变更单</h3><div class="sp"></div><a class="hint" href="/changes">全部 ›</a></div>
       <div class="bd tight">
         <table>
-          <thead><tr><th style="width:76px">单号</th><th>改什么</th><th style="width:78px">来源</th>
+          <thead><tr><th style="width:76px">单号</th><th>变更内容</th><th style="width:78px">来源</th>
             <th style="width:78px">状态</th></tr></thead>
           <tbody>
           {% for c in changes %}
             <tr>
               <td class="mono xs">{{ c.code }}</td>
               <td class="sm"><b>{{ c.title }}</b><div class="xs dim">{{ c.detail[:60] }}{% if c.detail|length > 60 %}…{% endif %}</div></td>
-              <td><span class="tag">{{ CHANGE_KIND.get(c.kind) }}</span><div class="xs dim">{{ c.source or '—' }}</div></td>
+              <td><span class="tag nowrap">{{ CHANGE_KIND.get(c.kind) }}</span><div class="xs dim nowrap">{{ c.source or '—' }}</div></td>
               <td>
                 <span class="pill p-{{ 'open' if c.status=='open' else ('accepted' if c.status in ('accepted','done') else 'rejected') }}">{{ CHANGE_STATUS.get(c.status) }}</span>
-                {% if c.customer_confirmed %}<div class="xs" style="color:#7e22ce">客户认过</div>{% endif %}
+                {% if c.customer_confirmed %}<div class="xs nowrap" style="color:#7e22ce">客户已确认</div>{% endif %}
               </td>
             </tr>
           {% endfor %}
-          {% if not changes %}<tr><td colspan="4"><div class="empty xs">没有变更单</div></td></tr>{% endif %}
+          {% if not changes %}<tr><td colspan="4"><div class="empty xs">暂无变更单</div></td></tr>{% endif %}
           </tbody>
         </table>
       </div>
@@ -189,21 +189,21 @@
 
   <div>
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>客户到底要什么</h3></div>
+      <div class="hd"><h3>客户需求</h3></div>
       <div class="bd">
-        <p class="sm" style="margin:0;white-space:pre-wrap">{{ o.requirements or '业务没写。这就是你天天被追问的原因之一。' }}</p>
+        <p class="sm" style="margin:0;white-space:pre-wrap">{{ o.requirements or '业务部未填写需求说明。' }}</p>
         {% if o.note %}<div class="hr"></div><div class="xs dim">{{ o.note }}</div>{% endif %}
       </div>
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>BOM 摘要</h3><div class="sp"></div><a class="hint" href="/bom/{{ o.id }}">去改 ›</a></div>
+      <div class="hd"><h3>BOM 摘要</h3><div class="sp"></div><a class="hint" href="/bom/{{ o.id }}">详情 ›</a></div>
       <div class="bd">
         {% if bom %}
         <div class="flexr" style="gap:14px;margin-bottom:8px">
           <span class="xs"><span class="lamp ok"></span> 齐 {{ lamps.ok }}</span>
           <span class="xs"><span class="lamp warn"></span> 缺图 {{ lamps.warn }}</span>
-          <span class="xs"><span class="lamp bad"></span> 未发 {{ lamps.bad }}</span>
+          <span class="xs"><span class="lamp bad"></span> 未发布 {{ lamps.bad }}</span>
         </div>
         {% for r in bom[:6] %}
         <div class="xs" style="display:flex;gap:6px;padding:3px 0">
@@ -213,15 +213,15 @@
           <span class="dim">{{ r.qty|round(0)|int }}{{ r.unit }}</span>
         </div>
         {% endfor %}
-        {% if bom|length > 6 %}<div class="xs dim" style="margin-top:4px">…还有 {{ bom|length - 6 }} 行</div>{% endif %}
+        {% if bom|length > 6 %}<div class="xs dim" style="margin-top:4px">…另有 {{ bom|length - 6 }} 行</div>{% endif %}
         {% else %}
-        <div class="xs dim">还没有 BOM。工程部在「开模准备」这环建。</div>
+        <div class="xs dim">暂无 BOM，由工程部在「开模准备」环节建立。</div>
         {% endif %}
       </div>
     </div>
 
     <div class="card">
-      <div class="hd"><h3>这单干过什么</h3></div>
+      <div class="hd"><h3>操作记录</h3></div>
       <div class="bd">
         <ul class="tl">
           {% for l in logs %}
@@ -230,7 +230,7 @@
               <span class="d">{{ l.action }}</span>
               <div class="xs dim">{{ l.detail }}</div></span></li>
           {% endfor %}
-          {% if not logs %}<div class="empty xs">没有记录</div>{% endif %}
+          {% if not logs %}<div class="empty xs">暂无记录</div>{% endif %}
         </ul>
       </div>
     </div>

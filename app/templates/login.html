@@ -10,7 +10,7 @@
 <div class="login-wrap">
   <form class="login" method="post" action="/login">
     <h1>Relay <span style="font-size:13px;color:#0f766e;font-weight:700;letter-spacing:.06em">PDM</span></h1>
-    <div class="sub">一张图，一个真身，一棒一棒传下去。</div>
+    <div class="sub">一张图，一个真实版本，逐环节传递。</div>
     {% if err %}<div class="toast err"><span>!</span><div>{{ err }}</div></div>{% endif %}
     <div class="field">
       <label class="fl">账号</label>
@@ -20,11 +20,16 @@
       <label class="fl">密码</label>
       <input type="password" name="password" autocomplete="current-password" placeholder="••••••">
     </div>
-    <button class="btn primary" style="width:100%;height:36px;margin-top:6px" type="submit">进来</button>
+    <button class="btn primary" style="width:100%;height:36px;margin-top:6px" type="submit">登录</button>
     <div class="accounts">
-      演示账号：<b>admin</b> / admin123（管理员）<br>
-      sales 李强、design 赵敏、struct 周工、eng 陈工、mold 吴师傅、prod 郑班长 —— 密码都是 <b>123456</b><br>
-      审批用 <b>boss</b>（张主管）/ 123456
+      <div>管理员：<b>admin</b> / admin123（全部权限）</div>
+      <div>审批人：<b>boss</b> / 123456（张主管）</div>
+      <div style="margin-top:6px">部门账号（密码均为 <b>123456</b>）：</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px">
+        <span>sales 李强</span><span>design 赵敏</span>
+        <span>struct 周工</span><span>eng 陈工</span>
+        <span>mold 吴师傅</span><span>prod 郑班长</span>
+      </div>
     </div>
   </form>
 </div>

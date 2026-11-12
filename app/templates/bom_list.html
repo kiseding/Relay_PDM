@@ -6,7 +6,7 @@
 <div class="page-head">
   <div>
     <div class="t">零件清单（BOM）</div>
-    <div class="d">工程部维护，别人只读。每行自查：自制件有没有图、图发没发。</div>
+    <div class="d">由工程部维护，其他部门只读。校验自制件是否关联图档及图档发布状态。</div>
   </div>
 </div>
 
@@ -14,8 +14,8 @@
   <div class="bd tight">
     <table>
       <thead><tr>
-        <th style="width:130px">订单</th><th>产品</th><th style="width:150px">现在在谁手上</th>
-        <th class="mid" style="width:70px">零件行</th><th class="mid" style="width:110px">对图情况</th>
+        <th style="width:130px">订单</th><th>产品</th><th style="width:150px">当前环节</th>
+        <th class="mid" style="width:70px">零件行</th><th class="mid" style="width:110px">图档校验</th>
         <th style="width:90px">BOM 版本</th><th style="width:70px"></th>
       </tr></thead>
       <tbody>
@@ -29,14 +29,14 @@
             {% if o.n %}
               {% if o.warn %}<span class="lamp warn"></span> {{ o.warn }}{% endif %}
               {% if o.bad %}<span class="lamp bad"></span> {{ o.bad }}{% endif %}
-              {% if not o.warn and not o.bad %}<span class="lamp ok"></span> 齐{% endif %}
-            {% else %}<span class="dim">未建</span>{% endif %}
+              {% if not o.warn and not o.bad %}<span class="lamp ok"></span> 齐全{% endif %}
+            {% else %}<span class="dim">未建立</span>{% endif %}
           </td>
           <td class="sm">{{ '第 %d 版'|format(o.bom_rev) if o.bom_rev else '—' }}</td>
-          <td><a class="btn sm" href="/bom/{{ o.id }}">打开</a></td>
+          <td><a class="btn sm" href="/bom/{{ o.id }}">查看</a></td>
         </tr>
       {% endfor %}
-      {% if not rows %}<tr><td colspan="7"><div class="empty"><div class="big">☰</div>还没有订单</div></td></tr>{% endif %}
+      {% if not rows %}<tr><td colspan="7"><div class="empty"><div class="big">☰</div>暂无订单</div></td></tr>{% endif %}
       </tbody>
     </table>
   </div>

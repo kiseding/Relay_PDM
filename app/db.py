@@ -362,7 +362,7 @@ def seed_demo(conn: sqlite3.Connection) -> None:
         ).lastrowid
 
     def add_ver(did, vno, fname, note, status, uploaded="周工", chg=None):
-        stored, size, sha = _demo_file(fname, f"演示占位文件：{fname}\n真实使用时这里是 UG 导出的 prt/step 原件。\n")
+        stored, size, sha = _demo_file(fname, f"演示占位文件：{fname}\n实际使用时，此处为 UG 导出的 prt / step 原件。\n")
         return conn.execute(
             """INSERT INTO doc_versions(document_id,version_no,file_name,stored_name,size,sha256,change_note,
                                        change_id,status,uploaded_by,uploaded_by_name,uploaded_at,
@@ -371,7 +371,7 @@ def seed_demo(conn: sqlite3.Connection) -> None:
             (did, vno, fname, stored, size, sha, note, chg, status, 4, uploaded, day,
              "张主管" if status in ("published", "obsolete") else None,
              ts if status in ("published", "obsolete") else None,
-             "放行。" if status in ("published", "obsolete") else None),
+             "同意发布。" if status in ("published", "obsolete") else None),
         ).lastrowid
 
     def add_handover(oid, f, t, status, note, when, items=(), bom=None):
@@ -383,10 +383,10 @@ def seed_demo(conn: sqlite3.Connection) -> None:
             (oid, f, t, note, status, 4, "周工", stage(f)["dept"], when,
              "张主管" if status in ("approved", "accepted") else None,
              when if status in ("approved", "accepted") else None,
-             "结构没问题，放行。" if status in ("approved", "accepted") else None,
+             "结构无问题，同意放行。" if status in ("approved", "accepted") else None,
              "陈工" if status == "accepted" else None,
              when if status == "accepted" else None,
-             "收到，开始定开模编号。" if status == "accepted" else None),
+             "已收到，开始确定开模编号。" if status == "accepted" else None),
         ).lastrowid
         conn.execute("UPDATE handovers SET code=? WHERE id=?", (f"JJ-{hid:04d}", hid))
         for did, vid, dno, mold, title, dtype, vno, fname in items:
@@ -406,9 +406,9 @@ def seed_demo(conn: sqlite3.Connection) -> None:
     # ============ 订单 1：走到第 4 环（工程部手上）
     o1 = add_order("DD-2026-0113", "宏昌实业", "电饭煲上盖注塑模",
                    "外观件，A 面高光，卡扣结构要能一次脱模；材质 ABS+PC。客户提供 3D 与 2D 各一份。",
-                   "2026-12-20", 4, "客户催得紧，先出上盖本体，装饰圈后补。")
+                   "2026-12-20", 4, "客户交期较紧，先出上盖本体，装饰圈后续补充。")
 
-    d1 = add_doc(o1, "UG-2601-0113-01", "M-2601-A", "上盖本体", "3D图", "KL-8891, 上盖主体", "客户料号 KL-8891")
+    d1 = add_doc(o1, "UG-2601-0113-01", "M-2601-A", "上盖本体", "3D图", "KL-8891, 上盖主体", "客户料号：KL-8891")
     v1 = add_ver(d1, 1, "上盖本体_v1.prt", "首版，按客户提供的 3D 建模。", "obsolete")
     v2 = add_ver(d1, 2, "上盖本体_v2.prt", "按 BG-0001 三个卡扣下移 3mm。", "published", chg=1)
     conn.execute("UPDATE documents SET current_version_id=? WHERE id=?", (v2, d1))
@@ -417,12 +417,12 @@ def seed_demo(conn: sqlite3.Connection) -> None:
     v3 = add_ver(d2, 1, "上盖装饰圈_v1.dwg", "首版 2D 尺寸图。", "published")
     conn.execute("UPDATE documents SET current_version_id=? WHERE id=?", (v3, d2))
 
-    d3 = add_doc(o1, "UG-2601-0113-05", "M-2601-E", "卡扣镶件", "3D图", "镶件", "模具部说要单独做镶件")
-    v4 = add_ver(d3, 1, "卡扣镶件_v1.prt", "首版，待审。", "draft")
+    d3 = add_doc(o1, "UG-2601-0113-05", "M-2601-E", "卡扣镶件", "3D图", "镶件", "模具部要求单独制作镶件。")
+    v4 = add_ver(d3, 1, "卡扣镶件_v1.prt", "首版，待审批。", "draft")
 
-    add_handover(o1, 1, 2, "accepted", "外观方案客户已看过，转结构。", day)
-    add_handover(o1, 2, 3, "accepted", "结构 3D 完成，交工程部定开模编号。", day)
-    add_handover(o1, 3, 4, "accepted", "开模图与 BOM 初版一并交过来，请核对镶件。", ts,
+    add_handover(o1, 1, 2, "accepted", "外观方案已获客户确认，转结构设计。", day)
+    add_handover(o1, 2, 3, "accepted", "结构 3D 已完成，转工程部确定开模编号。", day)
+    add_handover(o1, 3, 4, "accepted", "开模图与 BOM 初版一并提交，请核对镶件。", ts,
                  items=[(d1, v2, "UG-2601-0113-01", "M-2601-A", "上盖本体", "3D图", 2, "上盖本体_v2.prt"),
                         (d2, v3, "UG-2601-0113-02", "M-2601-B", "上盖装饰圈", "2D图纸", 1, "上盖装饰圈_v1.dwg")])
 
@@ -432,7 +432,7 @@ def seed_demo(conn: sqlite3.Connection) -> None:
         (None, 0, "UG-2601-0113-01", "上盖本体", "ABS+PC 本色", 1, "件", "自制", d1, ""),
         (None, 0, "UG-2601-0113-02", "上盖装饰圈", "PC 透明", 1, "件", "自制", d2, ""),
         (None, 0, "GB/T 818 M2×5", "十字槽盘头螺钉", "不锈钢", 3, "件", "标准件", None, ""),
-        (None, 0, "UG-2601-0113-05", "卡扣镶件", "S136 淬火", 2, "件", "自制", None, "图还没挂，等模具部确认结构"),
+        (None, 0, "UG-2601-0113-05", "卡扣镶件", "S136 淬火", 2, "件", "自制", None, "图档尚未关联，待模具部确认结构。"),
     ]
     parent_map = {}
     for i, (_, seq, pno, pname, spec, qty, unit, src, did, note) in enumerate(bom_rows):
@@ -451,7 +451,7 @@ def seed_demo(conn: sqlite3.Connection) -> None:
     conn.execute("UPDATE orders SET bom_rev=3 WHERE id=?", (o1,))
 
     # 第 4 环：工程部已提交交接单，等主管审批
-    add_handover(o1, 4, 5, "pending", "开模编号 M-2601-A/B/E 已定，BOM 与开模图请审。", ts,
+    add_handover(o1, 4, 5, "pending", "开模编号 M-2601-A/B/E 已确定，请审批 BOM 与开模图。", ts,
                  items=[(d1, v2, "UG-2601-0113-01", "M-2601-A", "上盖本体", "3D图", 2, "上盖本体_v2.prt")],
                  bom=(3, [{"no": "1", "part_no": "SP-2601-00", "part_name": "上盖组件", "spec": "ABS+PC 本色",
                            "qty": 1, "unit": "套", "source": "装配", "doc": "", "lamp": "ok"},
@@ -470,15 +470,15 @@ def seed_demo(conn: sqlite3.Connection) -> None:
                                decision_note,decided_by_name,decided_at,document_id,created_by,created_by_name,created_at)
            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         ("BG-0001", o1, "customer", "卡扣位置整体下移 3mm",
-         "客户装配时发现上盖扣不紧，要求三个卡扣全部下移 3mm，其余不变。微信里发了截图。",
-         "微信", 1, "done", "已采纳，v2 里改掉，客户看过渲染图确认。", "张主管", day, d1, 2, "李强", day),
+         "客户装配时发现上盖扣合不紧，要求三个卡扣全部下移 3mm，其余不变，微信已发送截图。",
+         "微信", 1, "done", "已采纳，v2 已修改，客户查看渲染图后确认。", "张主管", day, d1, 2, "李强", day),
     )
     conn.execute(
         """INSERT INTO changes(code,order_id,kind,title,detail,source,customer_confirmed,status,
                                decision_note,decided_by_name,decided_at,document_id,created_by,created_by_name,created_at)
            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         ("BG-0002", o1, "customer", "A 面增加晒纹（细火花纹）",
-         "客户说外观太亮，想改细纹，纹号还没给，让我们先报价。", "电话", 0, "open",
+         "客户反馈外观偏亮，希望改为细纹，纹号尚未提供，要求先行报价。", "电话", 0, "open",
          None, None, None, None, 2, "李强", ts),
     )
 
@@ -490,9 +490,9 @@ def seed_demo(conn: sqlite3.Connection) -> None:
     o3 = add_order("DD-2026-0131", "宏昌实业", "咖啡机外壳",
                    "双色外壳，A 面要咬花；内部需走线空间，客户希望减重 10%。", "2027-01-15", 3)
     d4 = add_doc(o3, "UG-2601-0131-01", None, "外壳主体", "3D图", "咖啡机主壳")
-    v5 = add_ver(d4, 1, "外壳主体_v1.prt", "首版结构，等客户确认外观纹路。", "draft")
-    add_handover(o3, 1, 2, "accepted", "需求已明确，转外观。", day)
-    add_handover(o3, 2, 3, "accepted", "外观方案定稿（咬花 PT-1102），转结构。", ts)
+    v5 = add_ver(d4, 1, "外壳主体_v1.prt", "首版结构，待客户确认外观纹路。", "draft")
+    add_handover(o3, 1, 2, "accepted", "需求已明确，转外观设计。", day)
+    add_handover(o3, 2, 3, "accepted", "外观方案已定稿（咬花 PT-1102），转结构设计。", ts)
 
     # ============ 订单 4 / 5：给总看板看「卡住」和「快完」两种状态
     def ago(n: int) -> str:
@@ -500,12 +500,12 @@ def seed_demo(conn: sqlite3.Connection) -> None:
 
     o4 = add_order("DD-2026-0108", "广东顺德美厨", "榨汁机底座",
                    "底座与刀座一体，壁厚 2.2；客户要求能过 1.2m 跌落测试。", "2026-12-10", 5,
-                   "模具部说前模滑块位置加工不到，等工程部定改法。")
+                   "模具部反馈前模滑块位置无法加工，待工程部确定改法。")
     d5 = add_doc(o4, "UG-2601-0108-01", "M-2512-C", "底座主体", "3D图", "刀座一体, MC-7712")
     v6 = add_ver(d5, 1, "底座主体_v1.prt", "首版，滑块结构按工程部意见改过一次。", "published")
     conn.execute("UPDATE documents SET current_version_id=? WHERE id=?", (v6, d5))
     for i, (f, t) in enumerate([(1, 2), (2, 3), (3, 4), (4, 5)]):
-        add_handover(o4, f, t, "accepted", "按流程转下一环。", ago(20 - i * 2))
+        add_handover(o4, f, t, "accepted", "按流程转下一环节。", ago(20 - i * 2))
     conn.execute("UPDATE orders SET created_at=?, updated_at=? WHERE id=?", (ago(22), ago(14), o4))
 
     o5 = add_order("DD-2026-0119", "宏昌实业", "电水壶外壳",
@@ -514,7 +514,7 @@ def seed_demo(conn: sqlite3.Connection) -> None:
     v7 = add_ver(d6, 1, "外壳主体_v1.prt", "定版，已量产。", "published")
     conn.execute("UPDATE documents SET current_version_id=? WHERE id=?", (v7, d6))
     for i, (f, t) in enumerate([(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7)]):
-        add_handover(o5, f, t, "accepted", "按流程转下一环。", ago(14 - i * 2))
+        add_handover(o5, f, t, "accepted", "按流程转下一环节。", ago(14 - i * 2))
     conn.execute("UPDATE orders SET created_at=?, updated_at=? WHERE id=?", (ago(16), ago(4), o5))
 
     for act, detail, oid in [

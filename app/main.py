@@ -223,7 +223,7 @@ def login(username: str = Form(...), password: str = Form(...)):
     try:
         u = conn.execute("SELECT * FROM users WHERE username=? AND active=1", (username.strip(),)).fetchone()
         if not u or not db.check_pwd(password, u["pwd_hash"]):
-            return go("/login", err="账号或密码不对")
+            return go("/login", err="账号或密码错误")
         resp = RedirectResponse("/", status_code=303)
         resp.set_cookie("plm_s", make_token(u["id"]), httponly=True, max_age=86400 * 30, samesite="lax")
         return resp
@@ -256,7 +256,8 @@ def dashboard(request: Request):
             d = dict(r)
             d["stage_info"] = st
             d["ho"] = dict(ho) if ho else None
-            if not ho and (st["dept"] == me["dept"] or me["role"] == "admin"):
+            # 第 7 环是最后一环，没有下一环节可交，不进待办
+            if not ho and st["no"] < 7 and (st["dept"] == me["dept"] or me["role"] == "admin"):
                 todo_submit.append(d)
             if ho and ho["status"] == "approved" and (db.stage(ho["to_stage"])["dept"] == me["dept"] or is_mgr):
                 todo_accept.append(d)
@@ -292,7 +293,7 @@ def _parse_ts(s: str | None):
 def board(request: Request):
     me = current_user(request)
     if me["role"] not in ("admin", "manager"):
-        return go("/", err="总看板只给管理员和主管看")
+        return go("/", err="总看板仅对管理员与主管开放")
     conn = db.connect()
     try:
         now = datetime.now(db.TZ8)
@@ -319,11 +320,11 @@ def board(request: Request):
                     "rejected": ("被驳回", "rej"),
                 }[ho["status"]]
                 # 卡住的不是部门，是具体的这一关
-                blocker = {"pending": "主管没签", "approved": "下家没签收",
-                           "rejected": "等重提"}[ho["status"]]
+                blocker = {"pending": "待主管审批", "approved": "待下一环节签收",
+                           "rejected": "待重新提交"}[ho["status"]]
             else:
                 flag, fcls = ("量产中" if st["no"] == 7 else "待提交", "todo")
-                blocker = f"在{db.dept_name(st['dept'])}手上"
+                blocker = f"{db.dept_name(st['dept'])}处理中"
 
             items = bom_view(conn, o["id"])
             cards.append({
@@ -421,7 +422,7 @@ def order_new(request: Request, customer_name: str = Form(""), product_name: str
             conn.execute("INSERT OR IGNORE INTO customers(name,created_at) VALUES(?,?)", (customer_name, ts))
         log(conn, me, "创建订单", "order", oid, oid, f"{code} {product_name}")
         conn.commit()
-        return go(f"/orders/{oid}", ok="订单建好了，可以往下走了")
+        return go(f"/orders/{oid}", ok="订单已创建")
     finally:
         conn.close()
 
@@ -433,7 +434,7 @@ def order_detail(request: Request, oid: int):
     try:
         o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
         if not o:
-            return go("/orders", err="找不到这张订单")
+            return go("/orders", err="未找到该订单")
         o = dict(o)
         docs = []
         for r in conn.execute("SELECT * FROM documents WHERE order_id=? ORDER BY id", (oid,)).fetchall():
@@ -491,7 +492,7 @@ def order_close(request: Request, oid: int):
         conn.execute("UPDATE orders SET status='closed', updated_at=? WHERE id=?", (db.now_str(), oid))
         log(conn, me, "结案", "order", oid, oid, "订单结案")
         conn.commit()
-        return go(f"/orders/{oid}", ok="已结案")
+        return go(f"/orders/{oid}", ok="订单已结案")
     finally:
         conn.close()
 
@@ -534,7 +535,7 @@ def doc_new(request: Request, order_id: int = Form(...), design_no: str = Form(.
     try:
         design_no = design_no.strip()
         if conn.execute("SELECT 1 FROM documents WHERE design_no=?", (design_no,)).fetchone():
-            return go(f"/orders/{order_id}", err=f"设计编号 {design_no} 已经有人用了")
+            return go(f"/orders/{order_id}", err=f"设计编号 {design_no} 已被使用")
         ts = db.now_str()
         did = conn.execute(
             """INSERT INTO documents(order_id,design_no,mold_no,title,doc_type,aliases,note,
@@ -544,7 +545,7 @@ def doc_new(request: Request, order_id: int = Form(...), design_no: str = Form(.
         ).lastrowid
         log(conn, me, "建图档", "document", did, order_id, f"{design_no} {title}")
         conn.commit()
-        return go(f"/docs/{did}", ok="图档建好了，接着传第一版")
+        return go(f"/docs/{did}", ok="图档已创建，请上传首版")
     finally:
         conn.close()
 
@@ -555,7 +556,7 @@ def doc_detail(request: Request, did: int):
     try:
         d = conn.execute("SELECT * FROM documents WHERE id=?", (did,)).fetchone()
         if not d:
-            return go("/docs", err="找不到这张图档")
+            return go("/docs", err="未找到该图档")
         d = dict(d)
         o = conn.execute("SELECT * FROM orders WHERE id=?", (d["order_id"],)).fetchone()
         vers = [dict(r) for r in conn.execute(
@@ -581,14 +582,14 @@ def doc_update(request: Request, did: int, mold_no: str = Form(""), aliases: str
         if not d:
             return go("/docs", err="找不到这张图档")
         if me["dept"] != "engineering" and me["role"] not in ("manager", "admin"):
-            return go(f"/docs/{did}", err="开模编号归工程部录，你改不了")
+            return go(f"/docs/{did}", err="开模编号由工程部维护，当前账号无修改权限")
         conn.execute(
             "UPDATE documents SET mold_no=?, aliases=?, title=?, doc_type=?, note=?, updated_at=? WHERE id=?",
             (mold_no.strip(), aliases, title or d["title"], doc_type or d["doc_type"], note,
              db.now_str(), did))
         log(conn, me, "改图档信息", "document", did, d["order_id"], f"{d['design_no']} 开模编号={mold_no}")
         conn.commit()
-        return go(f"/docs/{did}", ok="改好了")
+        return go(f"/docs/{did}", ok="已保存")
     finally:
         conn.close()
 
@@ -619,7 +620,7 @@ async def doc_upload(request: Request, did: int, file: UploadFile = File(...),
         log(conn, me, "上传版本", "document", did, d["order_id"],
             f"{d['design_no']} v{next_no} {file.filename}")
         conn.commit()
-        return go(f"/docs/{did}", ok=f"v{next_no} 传上来了。它是草稿，要挂交接单批过才算正式版")
+        return go(f"/docs/{did}", ok=f"v{next_no} 已上传，当前为草稿状态，经交接单审批后转为正式版本")
     finally:
         conn.close()
 
@@ -631,10 +632,10 @@ def ver_customer(request: Request, vid: int, note: str = Form("")):
     try:
         v = conn.execute("SELECT * FROM doc_versions WHERE id=?", (vid,)).fetchone()
         if not v:
-            return go("/docs", err="找不到这个版本")
+            return go("/docs", err="未找到该版本")
         d = conn.execute("SELECT * FROM documents WHERE id=?", (v["document_id"],)).fetchone()
         if me["dept"] not in ("sales", "manage") and me["role"] != "admin":
-            return go(f"/docs/{d['id']}", err="「客户确认」由业务员打勾，你打不了")
+            return go(f"/docs/{d['id']}", err="客户确认由业务部门登记，当前账号无操作权限")
         conn.execute(
             "UPDATE doc_versions SET customer_confirmed=1, customer_confirm_note=?, "
             "customer_confirmed_at=?, customer_confirmed_by=? WHERE id=?",
@@ -642,7 +643,7 @@ def ver_customer(request: Request, vid: int, note: str = Form("")):
         log(conn, me, "标记客户确认", "version", vid, d["order_id"],
             f"{d['design_no']} v{v['version_no']}：{note}")
         conn.commit()
-        return go(f"/docs/{d['id']}", ok="客户确认已记下，谁问都有据")
+        return go(f"/docs/{d['id']}", ok="客户确认已登记")
     finally:
         conn.close()
 
@@ -651,7 +652,7 @@ def ver_customer(request: Request, vid: int, note: str = Form("")):
 def get_file(request: Request, stored: str):
     p = FILES_DIR / stored
     if not p.exists():
-        return go("/", err="文件不见了")
+        return go("/", err="文件不存在")
     name = stored
     conn = db.connect()
     try:
@@ -700,15 +701,15 @@ async def handover_new(request: Request):
     try:
         o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
         if not o:
-            return go("/orders", err="找不到订单")
+            return go("/orders", err="未找到该订单")
         cur = db.stage(o["current_stage"])
         if cur["dept"] != me["dept"] and me["role"] not in ("manager", "admin"):
-            return go(f"/orders/{oid}", err=f"第 {cur['no']} 环是{db.dept_name(cur['dept'])}的活")
+            return go(f"/orders/{oid}", err=f"第 {cur['no']} 环由{db.dept_name(cur['dept'])}负责")
         if conn.execute("SELECT 1 FROM handovers WHERE order_id=? AND status IN ('pending','approved')",
                         (oid,)).fetchone():
-            return go(f"/orders/{oid}", err="这张单已经有一张交接单在走，先处理完再提")
+            return go(f"/orders/{oid}", err="该订单已有进行中的交接单，请处理完成后再提交")
         if not note:
-            return go(f"/orders/{oid}", err="写一句话说明这环做完了什么，下家才知道拿到的是什么")
+            return go(f"/orders/{oid}", err="请填写本环节完成情况说明")
         rnd = (conn.execute("SELECT MAX(round) m FROM handovers WHERE order_id=? AND from_stage=?",
                             (oid, cur["no"])).fetchone()["m"] or 0) + 1
         ts = db.now_str()
@@ -739,7 +740,7 @@ async def handover_new(request: Request):
         log(conn, me, "提交交接", "handover", hid, oid,
             f"{cur['no']:02d}→{cur['no']+1:02d} {cur['name']} → {db.stage(cur['no']+1)['name']}")
         conn.commit()
-        return go(f"/handovers/{hid}", ok="提交了，等主管审批")
+        return go(f"/handovers/{hid}", ok="已提交，等待主管审批")
     finally:
         conn.close()
 
@@ -751,7 +752,7 @@ def handover_detail(request: Request, hid: int):
     try:
         h = conn.execute("SELECT * FROM handovers WHERE id=?", (hid,)).fetchone()
         if not h:
-            return go("/handovers", err="找不到这张交接单")
+            return go("/handovers", err="未找到该交接单")
         h = dict(h)
         o = dict(conn.execute("SELECT * FROM orders WHERE id=?", (h["order_id"],)).fetchone())
         items = [dict(r) for r in conn.execute(
@@ -777,9 +778,9 @@ def handover_approve(request: Request, hid: int, note: str = Form("")):
     try:
         h = conn.execute("SELECT * FROM handovers WHERE id=?", (hid,)).fetchone()
         if not h or h["status"] != "pending":
-            return go(f"/handovers/{hid}", err="这张单不在待审批状态")
+            return go(f"/handovers/{hid}", err="该交接单当前状态不可审批")
         if me["role"] not in ("manager", "admin"):
-            return go(f"/handovers/{hid}", err="只有主管能审批")
+            return go(f"/handovers/{hid}", err="仅主管可执行审批")
         ts = db.now_str()
         conn.execute("UPDATE handovers SET status='approved', approver_name=?, approved_at=?, approve_note=? WHERE id=?",
                      (me["name"], ts, note, hid))
@@ -796,7 +797,7 @@ def handover_approve(request: Request, hid: int, note: str = Form("")):
         log(conn, me, "审批通过", "handover", hid, h["order_id"],
             f"{db.stage(h['from_stage'])['name']} → {db.stage(h['to_stage'])['name']}")
         conn.commit()
-        return go(f"/handovers/{hid}", ok="批了，等对方签收")
+        return go(f"/handovers/{hid}", ok="审批通过，等待下一环节签收")
     finally:
         conn.close()
 
@@ -808,14 +809,14 @@ def handover_reject(request: Request, hid: int, note: str = Form("")):
     try:
         h = conn.execute("SELECT * FROM handovers WHERE id=?", (hid,)).fetchone()
         if not h or h["status"] not in ("pending", "approved"):
-            return go(f"/handovers/{hid}", err="这张单已经不能驳回了")
+            return go(f"/handovers/{hid}", err="该交接单当前状态不可退回")
         if me["role"] not in ("manager", "admin"):
-            return go(f"/handovers/{hid}", err="只有主管能驳回")
+            return go(f"/handovers/{hid}", err="仅主管可执行退回")
         conn.execute("UPDATE handovers SET status='rejected', approver_name=?, approved_at=?, approve_note=? WHERE id=?",
-                     (me["name"], db.now_str(), note or "退回重做", hid))
+                     (me["name"], db.now_str(), note or "退回修改", hid))
         log(conn, me, "驳回交接", "handover", hid, h["order_id"], note or "退回重做")
         conn.commit()
-        return go(f"/handovers/{hid}", err="已退回，图上还是草稿，改完重新提一张")
+        return go(f"/handovers/{hid}", err="已退回，图档仍为草稿状态，修改后请重新提交")
     finally:
         conn.close()
 
@@ -827,10 +828,10 @@ def handover_accept(request: Request, hid: int, note: str = Form("")):
     try:
         h = conn.execute("SELECT * FROM handovers WHERE id=?", (hid,)).fetchone()
         if not h or h["status"] != "approved":
-            return go(f"/handovers/{hid}", err="这张单还没批，签收不了")
+            return go(f"/handovers/{hid}", err="该交接单尚未审批，无法签收")
         to_info = db.stage(h["to_stage"])
         if to_info["dept"] != me["dept"] and me["role"] != "admin":
-            return go(f"/handovers/{hid}", err=f"签收归{db.dept_name(to_info['dept'])}，不是你")
+            return go(f"/handovers/{hid}", err=f"签收由{db.dept_name(to_info['dept'])}执行，当前账号无操作权限")
         ts = db.now_str()
         conn.execute("UPDATE handovers SET status='accepted', receiver_name=?, received_at=?, receive_note=? WHERE id=?",
                      (me["name"], ts, note, hid))
@@ -839,7 +840,7 @@ def handover_accept(request: Request, hid: int, note: str = Form("")):
         log(conn, me, "签收交接", "handover", hid, h["order_id"],
             f"第 {h['to_stage']} 环 {to_info['name']} 开始")
         conn.commit()
-        return go(f"/orders/{h['order_id']}", ok=f"签收了，这单走到第 {h['to_stage']} 环")
+        return go(f"/orders/{h['order_id']}", ok=f"已签收，订单进入第 {h['to_stage']} 环节")
     finally:
         conn.close()
 
@@ -899,7 +900,7 @@ def bom_add(request: Request, oid: int, part_name: str = Form(...), part_no: str
     conn = db.connect()
     try:
         if me["dept"] != "engineering" and me["role"] not in ("manager", "admin"):
-            return go(f"/bom/{oid}", err="BOM 归工程部维护，你只能看")
+            return go(f"/bom/{oid}", err="BOM 由工程部维护，当前账号为只读权限")
         ts = db.now_str()
         seq = (conn.execute("SELECT MAX(seq) m FROM bom_items WHERE order_id=?", (oid,)).fetchone()["m"] or 0) + 1
         conn.execute(
@@ -911,7 +912,7 @@ def bom_add(request: Request, oid: int, part_name: str = Form(...), part_no: str
         conn.execute("UPDATE orders SET bom_rev=bom_rev+1, updated_at=? WHERE id=?", (ts, oid))
         log(conn, me, "改 BOM", "order", oid, oid, f"新增零件 {part_no} {part_name} ×{qty:g}")
         conn.commit()
-        return go(f"/bom/{oid}", ok="加了一行")
+        return go(f"/bom/{oid}", ok="已新增零件")
     finally:
         conn.close()
 
@@ -925,13 +926,13 @@ def bom_delete(request: Request, oid: int, item_id: int = Form(...)):
             return go(f"/bom/{oid}", err="BOM 归工程部维护，你只能看")
         it = conn.execute("SELECT * FROM bom_items WHERE id=?", (item_id,)).fetchone()
         if not it:
-            return go(f"/bom/{oid}", err="这行已经没了")
+            return go(f"/bom/{oid}", err="该零件记录已不存在")
         conn.execute("DELETE FROM bom_items WHERE parent_id=?", (item_id,))
         conn.execute("DELETE FROM bom_items WHERE id=?", (item_id,))
         conn.execute("UPDATE orders SET bom_rev=bom_rev+1, updated_at=? WHERE id=?", (db.now_str(), oid))
         log(conn, me, "改 BOM", "order", oid, oid, f"删除零件 {it['part_no']} {it['part_name']}")
         conn.commit()
-        return go(f"/bom/{oid}", ok="删了（子件一起删）")
+        return go(f"/bom/{oid}", ok="已删除（含全部子件）")
     finally:
         conn.close()
 
@@ -1000,7 +1001,7 @@ def change_new(request: Request, order_id: int = Form(...), kind: str = Form("cu
         log(conn, me, "提变更单", "change", cid, order_id,
             f"{code} {db.CHANGE_KIND.get(kind, kind)}：{title}")
         conn.commit()
-        return go("/changes", ok=f"{code} 提上去了")
+        return go("/changes", ok=f"{code} 已提交")
     finally:
         conn.close()
 
@@ -1011,16 +1012,16 @@ def change_decide(request: Request, cid: int, status: str = Form(...), note: str
     conn = db.connect()
     try:
         if me["role"] not in ("manager", "admin"):
-            return go("/changes", err="采纳与否归主管裁定")
+            return go("/changes", err="变更裁定由主管执行")
         c = conn.execute("SELECT * FROM changes WHERE id=?", (cid,)).fetchone()
         if not c:
-            return go("/changes", err="找不到这张单")
+            return go("/changes", err="未找到该变更单")
         conn.execute("UPDATE changes SET status=?, decision_note=?, decided_by_name=?, decided_at=? WHERE id=?",
                      (status, note, me["name"], db.now_str(), cid))
         log(conn, me, "裁定变更", "change", cid, c["order_id"],
             f"{c['code']} {db.CHANGE_STATUS.get(status, status)}：{note}")
         conn.commit()
-        return go("/changes", ok="裁定记下了")
+        return go("/changes", ok="裁定已记录")
     finally:
         conn.close()
 
@@ -1089,16 +1090,16 @@ def user_new(request: Request, username: str = Form(...), name: str = Form(...),
              dept: str = Form("structure"), role: str = Form("staff"), password: str = Form("123456")):
     me = current_user(request)
     if me["role"] != "admin":
-        return go("/settings", err="只有管理员能加人")
+        return go("/settings", err="仅管理员可新增账号")
     conn = db.connect()
     try:
         if conn.execute("SELECT 1 FROM users WHERE username=?", (username.strip(),)).fetchone():
-            return go("/settings", err="这个账号名已经有人用了")
+            return go("/settings", err="该账号已存在")
         conn.execute("INSERT INTO users(username,name,dept,role,pwd_hash,created_at) VALUES(?,?,?,?,?,?)",
                      (username.strip(), name, dept, role, db.hash_pwd(password), db.now_str()))
         log(conn, me, "加账号", "user", 0, None, f"{name}（{db.dept_name(dept)}）")
         conn.commit()
-        return go("/settings", ok="加好了，默认密码就是他填的那个")
+        return go("/settings", ok="账号已创建")
     finally:
         conn.close()
 
@@ -1107,14 +1108,14 @@ def user_new(request: Request, username: str = Form(...), name: str = Form(...),
 def user_toggle(request: Request, uid: int):
     me = current_user(request)
     if me["role"] != "admin":
-        return go("/settings", err="只有管理员能停用账号")
+        return go("/settings", err="仅管理员可变更账号状态")
     conn = db.connect()
     try:
         u = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
         if u and u["username"] != "admin":
             conn.execute("UPDATE users SET active=? WHERE id=?", (0 if u["active"] else 1, uid))
             conn.commit()
-        return go("/settings", ok="改好了")
+        return go("/settings", ok="已保存")
     finally:
         conn.close()
 
@@ -1123,9 +1124,9 @@ def user_toggle(request: Request, uid: int):
 def settings_reset(request: Request, confirm: str = Form("")):
     me = current_user(request)
     if me["role"] != "admin":
-        return go("/settings", err="只有管理员能清数据")
+        return go("/settings", err="仅管理员可重置数据")
     if confirm != "RESET":
-        return go("/settings", err="要清空就在框里输 RESET")
+        return go("/settings", err="请输入 RESET 以确认")
     conn = db.connect()
     try:
         db.reset_business_data(conn)

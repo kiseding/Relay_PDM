@@ -5,18 +5,18 @@
 
 <div class="page-head">
   <div>
-    <div class="t">全厂一张板，谁也别猜</div>
-    <div class="d">每张卡片停在哪个坑里，就是卡在哪个部门。每张卡片右上角是<strong>在这一环待了几天</strong> —— 超过 7 天发黄，14 天发红；屏幕窄时七列可左右滑。</div>
+    <div class="t">全厂订单分布</div>
+    <div class="d">卡片所处环节即订单当前所在部门。右上角为<strong>在当前环节的停留天数</strong>，超过 7 天标记为黄色，超过 14 天标记为红色；页面较窄时可横向滚动查看七列。</div>
   </div>
   <div class="right"><a class="btn sm" href="/board">刷新</a></div>
 </div>
 
 <div class="grid kb-stats">
-  <a class="stat teal" href="/orders"><div class="k">在跑订单</div><div class="v">{{ stats.active }}</div><div class="f">{{ stats.from_sales }} 个客户</div></a>
-  <div class="stat {{ 'warn' if stats.stuck }}"><div class="k">卡超 7 天</div><div class="v">{{ stats.stuck }}</div><div class="f">两周以上要出事</div></div>
-  <a class="stat {{ 'warn' if stats.pending }}" href="/handovers"><div class="k">等主管审批</div><div class="v">{{ stats.pending }}</div><div class="f">卡在签字这一关</div></a>
-  <div class="stat {{ 'warn' if stats.unconfirmed }}"><div class="k">客户没点头</div><div class="v">{{ stats.unconfirmed }}</div><div class="f">已发布但客户没确认</div></div>
-  <a class="stat {{ 'warn' if stats.nodrawing }}" href="/bom"><div class="k">缺图零件</div><div class="v">{{ stats.nodrawing }}</div><div class="f">BOM 里写了图没挂</div></a>
+  <a class="stat teal" href="/orders"><div class="k">进行中订单</div><div class="v">{{ stats.active }}</div><div class="f">{{ stats.from_sales }} 个客户</div></a>
+  <div class="stat {{ 'warn' if stats.stuck }}"><div class="k">滞留超 7 天</div><div class="v">{{ stats.stuck }}</div><div class="f">超过两周需重点跟进</div></div>
+  <a class="stat {{ 'warn' if stats.pending }}" href="/handovers"><div class="k">待主管审批</div><div class="v">{{ stats.pending }}</div><div class="f">等待主管审批</div></a>
+  <div class="stat {{ 'warn' if stats.unconfirmed }}"><div class="k">客户未确认</div><div class="v">{{ stats.unconfirmed }}</div><div class="f">已发布但未获客户确认</div></div>
+  <a class="stat {{ 'warn' if stats.nodrawing }}" href="/bom"><div class="k">缺失图档零件</div><div class="v">{{ stats.nodrawing }}</div><div class="f">BOM 已登记但未关联图档</div></a>
 </div>
 
 <div class="kb">
@@ -36,18 +36,18 @@
           <span class="kb-days {{ c.level }}">{{ c.days }}天</span>
         </div>
         <div class="kb-pn">{{ c.o.product_name }}</div>
-        <div class="kb-cust">{{ c.o.customer_name or '未填客户' }}</div>
+        <div class="kb-cust">{{ c.o.customer_name or '未填写客户' }}</div>
         <div class="kb-fl {{ c.fcls }}">{{ c.flag }}</div>
         <div class="kb-meta">
-          <span title="这个订单的图档数">图{{ c.docs }}</span>
-          {% if c.warn %}<span class="kb-mi warn" title="BOM 里写了零件，图没挂">缺图{{ c.warn }}</span>{% endif %}
-          {% if c.bad %}<span class="kb-mi bad" title="挂了图，但当前版本没发布">未发{{ c.bad }}</span>{% endif %}
-          {% if c.ok and not c.warn and not c.bad %}<span class="kb-mi ok" title="零件都挂上已发布的图了">齐</span>{% endif %}
-          <span class="kb-due">{{ ('交 ' + c.o.due_date[5:]) if c.o.due_date else '' }}</span>
+          <span title="本订单图档数">图档 {{ c.docs }}</span>
+          {% if c.warn %}<span class="kb-mi warn" title="BOM 已登记零件，但未关联图档">缺图 {{ c.warn }}</span>{% endif %}
+          {% if c.bad %}<span class="kb-mi bad" title="已关联图档，但当前版本未发布">未发布 {{ c.bad }}</span>{% endif %}
+          {% if c.ok and not c.warn and not c.bad %}<span class="kb-mi ok" title="零件均已关联已发布图档">齐全</span>{% endif %}
+          <span class="kb-due">{{ ('交期 ' + c.o.due_date[5:]) if c.o.due_date else '' }}</span>
         </div>
       </a>
       {% else %}
-      <div class="kb-none">空</div>
+      <div class="kb-none">暂无</div>
       {% endfor %}
     </div>
   </div>
@@ -57,8 +57,8 @@
 <div class="grid g2" style="margin-top:18px">
 
   <div class="card">
-    <div class="hd"><h3>堵得最久的五张单</h3><div class="sp"></div>
-      <span class="hint">按在当前环节停留的天数排</span></div>
+    <div class="hd"><h3>滞留最久订单</h3><div class="sp"></div>
+      <span class="hint">按当前环节停留天数排序</span></div>
     <div class="bd" style="padding:0">
       {% if slow %}
       {% for c in slow %}
@@ -71,13 +71,13 @@
         <span class="xs dim nowrap">{{ c.o.due_date[5:] if c.o.due_date else '' }}</span>
       </a>
       {% endfor %}
-      {% else %}<div class="empty xs">没有在跑的订单</div>{% endif %}
+      {% else %}<div class="empty xs">暂无进行中订单</div>{% endif %}
     </div>
   </div>
 
   <div class="card">
-    <div class="hd"><h3>客户还没点头的图</h3><div class="sp"></div>
-      <span class="hint">已发布，但业务没打确认勾</span></div>
+    <div class="hd"><h3>客户未确认图档</h3><div class="sp"></div>
+      <span class="hint">已发布但业务尚未登记客户确认</span></div>
     <div class="bd" style="padding:0">
       {% if unconfirmed %}
       {% for v in unconfirmed %}
@@ -94,7 +94,7 @@
       </div>
       {% endfor %}
       {% else %}
-      <div class="empty"><div class="big">✓</div>发出去的图，客户都认了。</div>
+      <div class="empty"><div class="big">✓</div>已发布图档均已获客户确认。</div>
       {% endif %}
     </div>
   </div>
