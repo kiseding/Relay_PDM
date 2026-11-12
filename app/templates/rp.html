@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}打样单{% endblock %}
+{% block head %}打样单{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="t">打样单</div>
+    <div class="d">按已发布的图档版本打样，做色要求必填；同一订单可多次开单，不占用七环节进度。</div>
+  </div>
+  <div class="sp"></div>
+  <a class="btn sm {{ 'primary' if tab == 'open' }}" href="/rp?tab=open">在办</a>
+  <a class="btn sm {{ 'primary' if tab == 'all' }}" href="/rp?tab=all">全部</a>
+  <button class="btn primary" onclick="document.getElementById('newrp').open=true">＋ 开打样单</button>
+</div>
+
+<details class="card" id="newrp" style="margin-bottom:16px">
+  <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">
+    ＋ 开打样单
+    <span class="xs dim" style="font-weight:400"> · 必须写明依据哪一版图档、按什么颜色打</span>
+  </summary>
+  <form method="post" action="/rp/new" style="padding:14px 16px 16px;border-top:1px solid var(--line2)">
+    <div class="row">
+      <div><label class="fl">所属订单 *</label>
+        <select name="order_id" id="rp-order" required onchange="filterVer()">
+          {% for o in orders %}<option value="{{ o.id }}" data-color="{{ o.color_req or '' }}">{{ o.code }} · {{ o.product_name }}</option>{% endfor %}
+        </select></div>
+      <div><label class="fl">打样依据版本 *</label>
+        <select name="version_id" id="rp-ver" required></select></div>
+      <div><label class="fl">数量（只）</label>
+        <input type="number" name="qty" value="1" min="1" style="width:100%"></div>
+    </div>
+    <div class="field" style="margin-top:10px"><label class="fl">这次打样要确认什么 *</label>
+      <input type="text" name="purpose" required placeholder="例：确认卡扣下移后的装配手感，并看内侧条纹凸起 0.5 的效果"></div>
+    <div class="row" style="margin-top:10px">
+      <div><label class="fl">做色要求 *</label>
+        <input type="text" name="color_req" id="rp-color" required placeholder="例：砂黑手工喷漆哑光；另一只砂红">
+        <div class="hintline">缺做色要求打出来的样多半要重做，故设为必填。</div></div>
+      <div><label class="fl">镜片规格</label>
+        <input type="text" name="lens_spec" placeholder="例：1.6mm PC 平片，透光率 ≥88%"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label class="fl">要求完成日</label>
+        <input type="text" name="due_date" placeholder="2026-11-18"></div>
+      <div><label class="fl">交接人</label>
+        <input type="text" name="handler" placeholder="手样：陈文建 / 精雕：唐志杰"></div>
+    </div>
+    <div class="field"><label class="fl">补充说明</label>
+      <textarea name="note" rows="2" placeholder="例：脚垫、鼻垫需分离建模，便于二射喷漆。"></textarea></div>
+    <button class="btn primary" type="submit">提交打样单</button>
+  </form>
+</details>
+
+<div class="card">
+  <div class="bd tight">
+    <table>
+      <thead><tr>
+        <th style="width:96px">单号</th><th style="width:124px">订单</th>
+        <th>打样要求</th><th style="width:158px">依据版本</th>
+        <th style="width:88px">交期 / 交接</th><th style="width:84px">状态</th>
+        <th style="width:104px">处理</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td class="mono xs">{{ r.code }}</td>
+          <td class="xs"><span class="mono">{{ r.order_code }}</span>
+            <div class="dim">{{ r.product_name }}</div></td>
+          <td class="sm"><b>{{ r.purpose }}</b>
+            <div class="xs dim">做色：{{ r.color_req }}{% if r.lens_spec %} · 镜片：{{ r.lens_spec }}{% endif %}</div>
+            {% if r.note %}<div class="xs dim">{{ r.note }}</div>{% endif %}
+            <div class="xs dim">{{ r.created_by_name }} 开于 {{ r.created_at[:16] }}</div></td>
+          <td class="xs">{% if r.design_no %}<span class="mono nowrap">{{ r.design_no }}</span>
+              <div class="dim">{{ r.doc_type }}{% if r.version_no %} · v{{ r.version_no }}{% endif %}</div>
+            {% else %}—{% endif %}</td>
+          <td class="xs">{{ r.due_date or '—' }}
+            <div class="dim">{{ r.handler or '' }}</div></td>
+          <td><span class="pill p-{{ 'open' if r.status=='open' else ('approved' if r.status=='making' else ('accepted' if r.status=='done' else 'rejected')) }}">{{ RP_STATUS.get(r.status) }}</span>
+            {% if r.status == 'done' %}<div class="xs dim nowrap">{{ r.done_at[:10] if r.done_at else '' }}</div>{% endif %}</td>
+          <td>
+            {% if r.status in ('open','making') %}
+            <form method="post" action="/rp/{{ r.id }}/status" style="display:flex;gap:5px">
+              {% if r.status == 'open' %}
+              <input type="hidden" name="status" value="making">
+              <button class="btn sm" type="submit">开始做</button>
+              {% else %}
+              <input type="hidden" name="status" value="done">
+              <button class="btn sm primary" type="submit">已交付</button>
+              {% endif %}
+            </form>
+            {% elif r.status == 'done' %}
+              <span class="xs dim">{{ r.done_by_name or '' }} 交付</span>
+            {% else %}<span class="xs dim">—</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      {% if not rows %}<tr><td colspan="7"><div class="empty"><div class="big">◇</div>暂无打样单</div></td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const VERS = {{ vers|tojson }};
+function filterVer() {
+  const oid = document.getElementById('rp-order').value;
+  const sel = document.getElementById('rp-ver');
+  const cur = document.getElementById('rp-order').selectedOptions[0];
+  sel.innerHTML = '';
+  const list = VERS.filter(v => String(v.order_id) === String(oid));
+  if (!list.length) {
+    sel.innerHTML = '<option value="">该订单还没有图档版本</option>';
+    return;
+  }
+  for (const v of list) {
+    const o = document.createElement('option');
+    o.value = v.id;
+    o.textContent = `${v.title}（${v.design_no}） v${v.version_no} · ${v.status === 'published' ? '已发布' : '草稿'}`;
+    sel.appendChild(o);
+  }
+  const c = document.getElementById('rp-color');
+  if (!c.value && cur.dataset.color) c.value = cur.dataset.color;
+}
+filterVer();
+</script>
+{% endblock %}

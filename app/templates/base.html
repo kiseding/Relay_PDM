@@ -23,6 +23,8 @@
       <a href="/handovers" class="{{ 'on' if path.startswith('/handovers') }}"><span class="ic">⇄</span>交接单
         {% if nav_counts.handover %}<span class="cnt">{{ nav_counts.handover }}</span>{% endif %}</a>
       <a href="/bom" class="{{ 'on' if path.startswith('/bom') }}"><span class="ic">☰</span>BOM</a>
+      <a href="/rp" class="{{ 'on' if path.startswith('/rp') }}"><span class="ic">◇</span>打样单
+        {% if nav_counts.rp %}<span class="cnt">{{ nav_counts.rp }}</span>{% endif %}</a>
       <a href="/changes" class="{{ 'on' if path.startswith('/changes') }}"><span class="ic">✎</span>变更单
         {% if nav_counts.changes %}<span class="cnt">{{ nav_counts.changes }}</span>{% endif %}</a>
       <div class="grp">记录</div>

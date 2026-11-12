@@ -41,6 +41,81 @@
   </div>
 </div>
 
+{% if gate %}
+<div class="card gate {{ 'blocked' if gate_miss else 'pass' }}" style="margin-bottom:16px">
+  <div class="hd">
+    <h3>本环节齐套检查</h3>
+    <span class="tag dept-{{ cur.dept }}">{{ cur.name }}</span>
+    <div class="sp"></div>
+    {% if gate_miss %}
+      <span class="gate-state bad">缺 {{ gate_miss|length }} 项，不能转出</span>
+    {% else %}
+      <span class="gate-state ok">已齐套，可提交交接</span>
+    {% endif %}
+  </div>
+  <div class="bd tight">
+    <table>
+      <thead><tr><th style="width:26px"></th><th style="width:190px">必须项</th><th>为什么要这一项</th></tr></thead>
+      <tbody>
+      {% for g in gate %}
+        <tr>
+          <td>{% if g.ok %}<span class="lamp ok"></span>{% else %}<span class="lamp warn"></span>{% endif %}</td>
+          <td class="sm"><b>{{ g.label }}</b>{% if not g.ok %}<span class="xs" style="color:#b45309"> · 待补</span>{% endif %}</td>
+          <td class="xs dim">{{ g.why }}{% if g.detail %}（{{ g.detail }}）{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if gate_miss %}
+    {% set fillable = gate_miss | selectattr('k', 'in', ['color','custok','po','podate','moldno','t0']) | list %}
+    {% if fillable %}
+    <form method="post" action="/orders/{{ o.id }}/fill" class="gatefill">
+      <div class="xs dim" style="margin:10px 0 8px">在此补齐可现场填写的项目；图档类缺口请先到<a href="/docs">图档</a>页创建对应类型。</div>
+      <div class="grid g2" style="gap:10px">
+        {% for g in fillable %}
+          {% if g.k == 'color' %}
+          <div class="field" style="grid-column:1/-1">
+            <label class="fl">做色 / 表面处理要求</label>
+            <textarea name="color_req" rows="2" placeholder="例：镜框砂黑手工喷漆哑光；镜片 PC 透明，透光率 ≥88%"></textarea>
+          </div>
+          {% elif g.k == 'custok' %}
+          <div class="field">
+            <label class="fl">客户确认时间</label>
+            <input type="text" name="customer_ok_at" placeholder="2026-11-09 10:20">
+          </div>
+          <div class="field">
+            <label class="fl">确认渠道与依据</label>
+            <input type="text" name="customer_ok_note" placeholder="例：客户验样后微信群回复 OK，附对比图">
+          </div>
+          {% elif g.k == 'po' %}
+          <div class="field">
+            <label class="fl">模具采购单号</label>
+            <input type="text" name="po_no" placeholder="PO-2026-1187">
+          </div>
+          {% elif g.k == 'podate' %}
+          <div class="field">
+            <label class="fl">下单日期</label>
+            <input type="text" name="po_date" placeholder="2026-10-09">
+          </div>
+          {% elif g.k == 'moldno' %}
+          <label class="checkline"><input type="checkbox" name="mold_no_done" checked> 开模编号已编入各图档</label>
+          {% elif g.k == 't0' %}
+          <label class="checkline"><input type="checkbox" name="t0_done"> T0 试模已完成并确认</label>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <button class="btn primary sm" type="submit" style="margin-top:12px">保存补齐项</button>
+    </form>
+    {% else %}
+    <div class="gatefill" style="padding:10px 0 2px">
+      <span class="xs dim">缺口全部为图档：请到<a href="/docs">图档</a>页新建对应类型的图档并上传版本，再回来提交。</span>
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 {% if can_submit %}
 <details class="card" id="submitbox" style="margin-bottom:16px" {{ 'open' if not docs }}>
   <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">
@@ -185,6 +260,30 @@
         </table>
       </div>
     </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="hd"><h3>打样单</h3><div class="sp"></div>
+        <span class="hint">按具体版本打样，做色要求必填</span>
+        <a class="btn sm" href="/rp" style="margin-left:8px">去开单</a></div>
+      <div class="bd tight">
+        <table>
+          <thead><tr><th style="width:96px">单号</th><th>打样目的</th>
+            <th style="width:78px">依据版本</th><th style="width:82px">状态</th></tr></thead>
+          <tbody>
+          {% for r in rps %}
+            <tr>
+              <td class="mono xs">{{ r.code }}</td>
+              <td class="sm">{{ r.purpose }}
+                <div class="xs dim">{{ r.color_req }}{% if r.qty %} · {{ r.qty }} 只{% endif %}</div></td>
+              <td class="xs">{% if r.doc_title %}{{ r.doc_title }}<div class="dim mono">{% if r.version_no %}v{{ r.version_no }}{% endif %}</div>{% else %}—{% endif %}</td>
+              <td><span class="pill p-{{ 'open' if r.status=='open' else ('approved' if r.status=='making' else ('accepted' if r.status=='done' else 'rejected')) }}">{{ RP_STATUS.get(r.status) }}</span></td>
+            </tr>
+          {% endfor %}
+          {% if not rps %}<tr><td colspan="4"><div class="empty xs">暂无打样单</div></td></tr>{% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <div>
@@ -192,7 +291,19 @@
       <div class="hd"><h3>客户需求</h3></div>
       <div class="bd">
         <p style="margin:0;font-size:13px;line-height:1.75;white-space:pre-wrap">{{ o.requirements or '业务部未填写需求说明。' }}</p>
-        {% if o.note %}<div class="hr"></div><div class="xs dim">{{ o.note }}</div>{% endif %}
+        <div class="hr"></div>
+        <dl class="kv">
+          <dt>做色要求</dt><dd>{{ o.color_req or '—' }}</dd>
+          <dt>客户料号</dt><dd class="mono">{{ o.customer_part_no or '—' }}</dd>
+          <dt>客户确认</dt>
+          <dd>{% if o.customer_ok_at %}{{ o.customer_ok_at }}
+              <div class="xs dim">{{ o.customer_ok_note or '' }}</div>
+              {% else %}<span class="dim">未记录</span>{% endif %}</dd>
+          {% if o.po_no %}
+          <dt>模具采购单</dt><dd class="mono">{{ o.po_no }}<span class="xs dim"> · {{ o.po_date or '下单日未记' }}</span></dd>
+          {% endif %}
+        </dl>
+        {% if o.note %}<div class="xs dim" style="margin-top:8px">{{ o.note }}</div>{% endif %}
       </div>
     </div>
 

@@ -28,15 +28,85 @@ DEPTS = {
 
 # 七个环节。dept = 这一环由谁做
 STAGES = [
-    {"no": 1, "key": "intake",    "name": "接单",      "dept": "sales",       "do": "客户需求、交期、参考图"},
-    {"no": 2, "key": "concept",   "name": "外观设计",  "dept": "design",      "do": "效果图、CMF、外观限制"},
+    {"no": 1, "key": "intake",    "name": "接单",      "dept": "sales",       "do": "客户需求、做色要求、交期"},
+    {"no": 2, "key": "concept",   "name": "外观设计",  "dept": "design",      "do": "效果图、CMF、客户确认"},
     {"no": 3, "key": "structure", "name": "结构设计",  "dept": "structure",   "do": "3D 建模、分模、2D 出图"},
-    {"no": 4, "key": "moldprep",  "name": "开模准备",  "dept": "engineering", "do": "定开模编号、BOM、开模图"},
-    {"no": 5, "key": "mold",      "name": "开模",      "dept": "tooling",     "do": "加工、试模、改模"},
+    {"no": 4, "key": "moldprep",  "name": "开模准备",  "dept": "engineering", "do": "开模信息表、开模图、装配图"},
+    {"no": 5, "key": "mold",      "name": "开模",      "dept": "tooling",     "do": "报价、采购下单、T0 试模"},
     {"no": 6, "key": "release",   "name": "工程图发布", "dept": "engineering", "do": "正式工程图、BOM 定版"},
     {"no": 7, "key": "massprod",  "name": "量产",      "dept": "production",  "do": "按图生产大货"},
 ]
 STAGE_BY_NO = {s["no"]: s for s in STAGES}
+
+# 每环节转出前必须具备的条件（齐套清单）。
+# 依据：微信群反馈的返工点——做色要求没拿到就发 RP、图没更新就通知开模、
+# 没有装配图就报价、采购单没下却按口头交期排产。
+STAGE_GATES = {
+    1: [
+        {"k": "req",     "label": "客户需求说明",       "kind": "field", "field": "requirements",
+         "why": "需求不落字，后面全靠口头补"},
+        {"k": "color",   "label": "做色 / 表面处理要求", "kind": "field", "field": "color_req",
+         "why": "缺做色要求会导致 RP 打回来颜色不对"},
+        {"k": "due",     "label": "客户交期",           "kind": "field", "field": "due_date",
+         "why": "没有交期就无法判断哪一单被延误"},
+    ],
+    2: [
+        {"k": "concept", "label": "外观效果图",         "kind": "doc",   "dtype": "外观效果图",
+         "why": "外观结论要能落到图档上"},
+        {"k": "custok",  "label": "客户确认外观",       "kind": "field", "field": "customer_ok_at",
+         "why": "客户口头说可以不算确认，需记录渠道与日期"},
+    ],
+    3: [
+        {"k": "3d",      "label": "结构 3D 图",         "kind": "doc",   "dtype": "3D图",
+         "why": "3D 是开模的唯一依据"},
+        {"k": "2d",      "label": "2D 图纸",           "kind": "doc",   "dtype": "2D图纸",
+         "why": "尺寸与公差需 2D 表达"},
+    ],
+    4: [
+        {"k": "info",    "label": "开模信息表",         "kind": "doc",   "dtype": "开模信息",
+         "why": "模具厂无开模信息表不能报价"},
+        {"k": "mold3d",  "label": "开模图",             "kind": "doc",   "dtype": "开模图",
+         "why": "开模图与产品图分离，避免拿错版本"},
+        {"k": "asm",     "label": "装配图",             "kind": "doc",   "dtype": "装配图",
+         "why": "装配关系不清会被模具厂反复追问"},
+        {"k": "moldno",  "label": "开模编号已编",       "kind": "flag",  "field": "mold_no_done",
+         "why": "开模编号由工程部统一编，未编不能进模具部"},
+    ],
+    5: [
+        {"k": "po",      "label": "模具采购单号",       "kind": "field", "field": "po_no",
+         "why": "没有采购单，模具厂无法领料开工"},
+        {"k": "podate",  "label": "下单日期",           "kind": "field", "field": "po_date",
+         "why": "交期从下单日起算，否则延期责任说不清"},
+        {"k": "t0",      "label": "T0 试模已完成",      "kind": "flag",  "field": "t0_done",
+         "why": "未试模就发工程图，量产必然改图"},
+    ],
+    6: [
+        {"k": "eng",     "label": "正式工程图",         "kind": "doc",   "dtype": "工程图",
+         "why": "量产与检验只认工程图"},
+    ],
+    7: [],
+}
+
+# 未走完的环节里，哪些条件还没满足
+def gate_check(conn, order: dict, stage_no: int) -> list[dict]:
+    out = []
+    for g in STAGE_GATES.get(int(stage_no), []):
+        ok, detail = False, ""
+        if g["kind"] == "field":
+            ok = bool((order.get(g["field"]) or "").strip())
+        elif g["kind"] == "flag":
+            ok = bool(order.get(g["field"]))
+        elif g["kind"] == "doc":
+            row = conn.execute(
+                """SELECT COUNT(*) c FROM documents d
+                   WHERE d.order_id=? AND d.doc_type=?
+                     AND EXISTS(SELECT 1 FROM doc_versions v WHERE v.document_id=d.id)""",
+                (order["id"], g["dtype"])).fetchone()
+            ok = row["c"] > 0
+            detail = f"应有「{g['dtype']}」类型图档"
+        out.append({"k": g["k"], "label": g["label"], "ok": ok,
+                    "why": g["why"], "detail": detail})
+    return out
 
 
 def stage(no: int | None) -> dict:
@@ -75,7 +145,15 @@ CHANGE_STATUS = {
     "done": "已改完",
 }
 
-DOC_TYPES = ["3D图", "2D图纸", "外观效果图", "渲染图", "开模图", "工程图", "DFM报告", "工艺文件", "其他"]
+DOC_TYPES = ["外观效果图", "渲染图", "3D图", "2D图纸", "装配图", "裁片图",
+             "开模信息", "开模图", "模流分析", "试模报告", "工程图", "DFM报告", "工艺文件", "其他"]
+
+RP_STATUS = {
+    "open": "待安排",
+    "making": "制作中",
+    "done": "已交付",
+    "cancel": "已取消",
+}
 
 BOM_SOURCES = ["装配", "自制", "外购", "标准件"]
 BOM_UNITS = ["件", "套", "个", "米", "克", "张"]
@@ -135,11 +213,41 @@ CREATE TABLE IF NOT EXISTS orders (
     status        TEXT NOT NULL DEFAULT 'active',
     bom_rev       INTEGER NOT NULL DEFAULT 0,
     note          TEXT,
+    color_req     TEXT,
+    customer_part_no TEXT,
+    customer_ok_at   TEXT,
+    customer_ok_note TEXT,
+    mold_no_done  INTEGER NOT NULL DEFAULT 0,
+    po_no         TEXT,
+    po_date       TEXT,
+    t0_done       INTEGER NOT NULL DEFAULT 0,
     created_by    INTEGER,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 );
 
+-- 打样单（RP / 手样）。可在一单里多次发起，不占用七环节。
+CREATE TABLE IF NOT EXISTS rp_requests (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    code           TEXT UNIQUE,
+    order_id       INTEGER NOT NULL,
+    document_id    INTEGER,
+    version_id     INTEGER,
+    purpose        TEXT,
+    color_req      TEXT,
+    lens_spec      TEXT,
+    qty            INTEGER NOT NULL DEFAULT 1,
+    due_date       TEXT,
+    handler        TEXT,
+    status         TEXT NOT NULL DEFAULT 'open',
+    note           TEXT,
+    created_by     INTEGER,
+    created_by_name TEXT,
+    created_at     TEXT NOT NULL,
+    done_at        TEXT,
+    done_by_name   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_rp_order ON rp_requests(order_id);
 CREATE TABLE IF NOT EXISTS documents (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id           INTEGER,
@@ -291,12 +399,30 @@ def connect() -> sqlite3.Connection:
     return conn
 
 
+# 旧库升级：只补列，不动数据
+NEW_ORDER_COLS = [
+    ("color_req", "TEXT"), ("customer_part_no", "TEXT"),
+    ("customer_ok_at", "TEXT"), ("customer_ok_note", "TEXT"),
+    ("mold_no_done", "INTEGER NOT NULL DEFAULT 0"),
+    ("po_no", "TEXT"), ("po_date", "TEXT"),
+    ("t0_done", "INTEGER NOT NULL DEFAULT 0"),
+]
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(orders)")}
+    for name, decl in NEW_ORDER_COLS:
+        if name not in have:
+            conn.execute(f"ALTER TABLE orders ADD COLUMN {name} {decl}")
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     FILES_DIR.mkdir(parents=True, exist_ok=True)
     conn = connect()
     try:
         conn.executescript(SCHEMA)
+        migrate(conn)
         conn.commit()
 
         if conn.execute("SELECT COUNT(*) c FROM users").fetchone()["c"] == 0:
@@ -517,8 +643,55 @@ def seed_demo(conn: sqlite3.Connection) -> None:
         add_handover(o5, f, t, "accepted", "按流程转下一环节。", ago(14 - i * 2))
     conn.execute("UPDATE orders SET created_at=?, updated_at=? WHERE id=?", (ago(16), ago(4), o5))
 
-    for act, detail, oid in [
-        ("创建订单", "DD-2026-0113 电饭煲上盖注塑模", o1),
+    # ============ 补齐新字段：让演示数据同时呈现「齐套」与「缺口」两种状态
+    conn.execute(
+        """UPDATE orders SET color_req=?, customer_part_no=?, customer_ok_at=?, customer_ok_note=?,
+                             mold_no_done=1 WHERE id=?""",
+        ("A 面高光本色注塑；装饰圈 PC 透明，透光率 ≥88%", "KL-8891 / KL-8892",
+         "2026-11-09 10:20", "客户验样后在微信群回复「外观 OK」，附 3 张对比图。", o1))
+    # o2 刚接单：故意不填做色要求，演示第 1 环被卡住
+    conn.execute("UPDATE orders SET color_req='' WHERE id=?", (o2,))
+    conn.execute(
+        """UPDATE orders SET color_req=?, customer_ok_at=?, customer_ok_note=? WHERE id=?""",
+        ("A 面咬花 PT-1102，B 面火花纹；主体雾面深灰", "2026-11-05 14:40",
+         "外观方案由客户设计师邮件确认。", o3))
+    conn.execute(
+        """UPDATE orders SET color_req=?, customer_part_no=?, customer_ok_at=?,
+                             mold_no_done=1, po_no=?, po_date=?, t0_done=0 WHERE id=?""",
+        ("底座黑色亮面，刀座 PP 本色", "MC-7712",
+         "2026-10-12 16:30", "PO-2026-1187", "2026-10-09", o4))
+    conn.execute(
+        """UPDATE orders SET color_req=?, customer_ok_at=?, mold_no_done=1,
+                             po_no=?, po_date=?, t0_done=1 WHERE id=?""",
+        ("A 面拉丝不锈钢，内衬 PP 本色", "2026-10-20 09:15",
+         "PO-2026-1102", "2026-09-18", o5))
+
+    # 第 5 环的订单补开模信息表与装配图（否则演示数据自身过不了第 4 环门槛）
+    for dtype, title, fname in [("开模信息", "底座开模信息表", "MC-7712 开模信息.xlsx"),
+                                ("装配图", "底座装配图", "底座装配图.dwg")]:
+        d = add_doc(o4, f"UG-2601-0108-{'09' if dtype == '开模信息' else '10'}", "M-2512-C",
+                    title, dtype, "")
+        v = add_ver(d, 1, fname, "开模前定版。", "published")
+        conn.execute("UPDATE documents SET current_version_id=? WHERE id=?", (v, d))
+
+    # 打样单：一单在手，一单已交付
+    conn.execute(
+        """INSERT INTO rp_requests(code,order_id,document_id,version_id,purpose,color_req,lens_spec,
+                                   qty,due_date,handler,status,note,created_by,created_by_name,created_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        ("RP-090318", o1, d1, v2, "确认卡扣下移后的装配手感", "砂黑手工喷漆，哑光",
+         "1.6mm PC 平片", 2, "2026-11-18", "陈文建", "making",
+         "手样做二射前需将脚垫、鼻垫分离建模。", 2, "李强", ts))
+    conn.execute(
+        """INSERT INTO rp_requests(code,order_id,document_id,version_id,purpose,color_req,lens_spec,
+                                   qty,due_date,handler,status,note,created_by,created_by_name,created_at,
+                                   done_at,done_by_name)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        ("RP-090316", o4, d5, v6, "客户拍照样", "黑色亮面", "1.5mm 尼龙",
+         1, "2026-10-25", "唐志杰", "done", "已交业务寄客户。", 2, "李强", day,
+         "2026-10-23 17:40", "陈文建"))
+
+    for act, detail, oid in [        ("创建订单", "DD-2026-0113 电饭煲上盖注塑模", o1),
         ("上传版本", "UG-2601-0113-01 上盖本体 v1", o1),
         ("审批通过", "交接 01→02 外观设计 → 结构设计", o1),
         ("上传版本", "UG-2601-0113-01 上盖本体 v2", o1),
@@ -534,9 +707,9 @@ def seed_demo(conn: sqlite3.Connection) -> None:
 
 def reset_business_data(conn: sqlite3.Connection) -> None:
     for t in ("handover_items", "handover_boms", "handovers", "doc_versions", "documents",
-              "bom_items", "changes", "orders", "customers", "audit_logs"):
+              "bom_items", "changes", "rp_requests", "orders", "customers", "audit_logs"):
         conn.execute(f"DELETE FROM {t}")
     conn.execute("DELETE FROM sqlite_sequence WHERE name IN "
                  "('handover_items','handover_boms','handovers','doc_versions','documents',"
-                 "'bom_items','changes','orders','customers','audit_logs')")
+                 "'bom_items','changes','rp_requests','orders','customers','audit_logs')")
     conn.commit()

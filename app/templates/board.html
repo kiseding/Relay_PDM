@@ -17,6 +17,7 @@
   <a class="stat {{ 'warn' if stats.pending }}" href="/handovers"><div class="k">待主管审批</div><div class="v">{{ stats.pending }}</div><div class="f">等待主管审批</div></a>
   <div class="stat {{ 'warn' if stats.unconfirmed }}"><div class="k">客户未确认</div><div class="v">{{ stats.unconfirmed }}</div><div class="f">已发布但未获客户确认</div></div>
   <a class="stat {{ 'warn' if stats.nodrawing }}" href="/bom"><div class="k">缺失图档零件</div><div class="v">{{ stats.nodrawing }}</div><div class="f">BOM 已登记但未关联图档</div></a>
+  <div class="stat {{ 'warn' if stats.gate_blocked }}"><div class="k">齐套未完成</div><div class="v">{{ stats.gate_blocked }}</div><div class="f">本环节必交项还没补齐</div></div>
 </div>
 
 <div class="kb">
@@ -42,6 +43,7 @@
           <span title="本订单图档数">图档 {{ c.docs }}</span>
           {% if c.warn %}<span class="kb-mi warn" title="BOM 已登记零件，但未关联图档">缺图 {{ c.warn }}</span>{% endif %}
           {% if c.bad %}<span class="kb-mi bad" title="已关联图档，但当前版本未发布">未发布 {{ c.bad }}</span>{% endif %}
+          {% if c.gate %}<span class="kb-mi bad" title="本环节必交项未齐：{{ c.gate_names|join('、') }}">缺件 {{ c.gate }}</span>{% endif %}
           {% if c.ok and not c.warn and not c.bad %}<span class="kb-mi ok" title="零件均已关联已发布图档">齐全</span>{% endif %}
           <span class="kb-due">{{ ('交期 ' + c.o.due_date[5:]) if c.o.due_date else '' }}</span>
         </div>

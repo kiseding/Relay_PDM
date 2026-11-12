@@ -255,7 +255,7 @@ details[open] summary{margin-bottom:10px}
 }
 
 /* ---------------- 总看板 ---------------- */
-.kb-stats{grid-template-columns:repeat(5,minmax(0,1fr)); margin-bottom:18px}
+.kb-stats{grid-template-columns:repeat(6,minmax(0,1fr)); margin-bottom:18px}
 .kb-stats a.stat{display:block; color:inherit; text-decoration:none; transition:border-color .12s}
 .kb-stats a.stat:hover{text-decoration:none; border-color:var(--tealline)}
 .kb{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:9px; align-items:stretch}
@@ -331,3 +331,17 @@ details[open] summary{margin-bottom:10px}
 .verrow{display:flex; gap:12px; padding:12px 10px; border-bottom:1px solid var(--line2); border-radius:8px}
 .verrow.cur{background:var(--tealbg); box-shadow:inset 3px 0 0 var(--teal)}
 .verrow:last-child{border-bottom:none}
+
+/* ---------------- 齐套检查 / 打样单 ---------------- */
+.card.gate .hd{padding-bottom:9px}
+.gate-state{font-size:11.5px; font-weight:650; padding:2px 9px; border-radius:999px}
+.gate-state.bad{background:var(--amberbg); color:#b45309; border:1px solid var(--amberline)}
+.gate-state.ok{background:var(--greenbg); color:var(--green); border:1px solid var(--greenline)}
+.card.gate.blocked{box-shadow:inset 3px 0 0 var(--amber)}
+.card.gate.pass{box-shadow:inset 3px 0 0 var(--green)}
+.gatefill{border-top:1px dashed var(--line); margin-top:4px}
+dl.kv{margin:0; display:grid; grid-template-columns:78px 1fr; gap:5px 10px; font-size:12.5px}
+dl.kv dt{color:var(--faint); font-size:12px}
+dl.kv dd{margin:0; color:var(--ink2); line-height:1.5}
+.p-making{background:var(--bluebg); color:var(--blue); border-color:#dbeafe}
+.p-cancel{background:#f8fafc; color:var(--faint); border-color:var(--line)}

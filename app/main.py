@@ -171,7 +171,7 @@ async def _auth_gate(request: Request, call_next):
 
 def nav_counts(me) -> dict:
     if not me:
-        return {"handover": 0, "changes": 0}
+        return {"handover": 0, "changes": 0, "rp": 0}
     conn = db.connect()
     try:
         if me["role"] in ("manager", "admin"):
@@ -179,7 +179,9 @@ def nav_counts(me) -> dict:
         else:
             n_ho = conn.execute("SELECT COUNT(*) c FROM handovers WHERE status='approved'").fetchone()["c"]
         n_ch = conn.execute("SELECT COUNT(*) c FROM changes WHERE status='open'").fetchone()["c"]
-        return {"handover": n_ho, "changes": n_ch}
+        n_rp = conn.execute(
+            "SELECT COUNT(*) c FROM rp_requests WHERE status IN ('open','making')").fetchone()["c"]
+        return {"handover": n_ho, "changes": n_ch, "rp": n_rp}
     finally:
         conn.close()
 
@@ -200,6 +202,8 @@ def render(request: Request, name: str, **ctx):
         "VER_STATUS": db.VER_STATUS,
         "CHANGE_KIND": db.CHANGE_KIND,
         "CHANGE_STATUS": db.CHANGE_STATUS,
+        "RP_STATUS": db.RP_STATUS,
+        "STAGE_GATES": db.STAGE_GATES,
         "DOC_TYPES": db.DOC_TYPES,
         "BOM_SOURCES": db.BOM_SOURCES,
         "BOM_UNITS": db.BOM_UNITS,
@@ -313,6 +317,7 @@ def board(request: Request):
             ho = conn.execute(
                 "SELECT * FROM handovers WHERE order_id=? AND status IN "
                 "('pending','approved','rejected') ORDER BY id DESC LIMIT 1", (o["id"],)).fetchone()
+            gmiss = [g for g in db.gate_check(conn, o, st["no"]) if not g["ok"]]
             if ho:
                 flag, fcls = {
                     "pending":  ("待审批", "pend"),
@@ -325,6 +330,8 @@ def board(request: Request):
             else:
                 flag, fcls = ("量产中" if st["no"] == 7 else "待提交", "todo")
                 blocker = f"{db.dept_name(st['dept'])}处理中"
+                if gmiss:
+                    blocker += f" · 齐套缺 {len(gmiss)} 项"
 
             items = bom_view(conn, o["id"])
             cards.append({
@@ -334,6 +341,8 @@ def board(request: Request):
                 "flag": flag, "fcls": fcls,
                 "ho_id": ho["id"] if ho else None,
                 "holder": blocker,
+                "gate": len(gmiss),
+                "gate_names": [g["label"] for g in gmiss][:3],
                 "docs": conn.execute("SELECT COUNT(*) c FROM documents WHERE order_id=?",
                                      (o["id"],)).fetchone()["c"],
                 "ok": sum(1 for i in items if i["lamp"] == "ok"),
@@ -357,6 +366,7 @@ def board(request: Request):
                 "WHERE v.status='published' AND v.customer_confirmed=0 AND o.status='active'"
             ).fetchone()["c"],
             "nodrawing": sum(c["warn"] for c in cards),
+            "gate_blocked": sum(1 for c in cards if c["gate"]),
             "from_sales": len({c["o"]["customer_name"] for c in cards if c["o"]["customer_name"]}),
         }
 
@@ -474,12 +484,56 @@ def order_detail(request: Request, oid: int):
                  "warn": sum(1 for r in bom if r["lamp"] == "warn"),
                  "bad": sum(1 for r in bom if r["lamp"] == "bad")}
         cur = db.stage(o["current_stage"])
+        gate = db.gate_check(conn, o, cur["no"])
+        gate_miss = [g for g in gate if not g["ok"]]
+        rps = [dict(r) for r in conn.execute(
+            """SELECT r.*, d.title AS doc_title, d.design_no, v.version_no FROM rp_requests r
+               LEFT JOIN documents d ON d.id=r.document_id
+               LEFT JOIN doc_versions v ON v.id=r.version_id
+               WHERE r.order_id=? ORDER BY r.id DESC""", (oid,)).fetchall()]
         can_submit = (cur["dept"] == me["dept"] or me["role"] in ("manager", "admin")) and \
             o["status"] == "active" and cur["no"] < 7 and \
             not any(h["status"] in ("pending", "approved") for h in handovers)
         return render(request, "order_detail.html", o=o, docs=docs, handovers=handovers,
                       changes=changes, bom=bom, logs=logs, cur=cur, can_submit=can_submit,
-                      steps=steps, lamps=lamps)
+                      steps=steps, lamps=lamps, gate=gate, gate_miss=gate_miss, rps=rps)
+    finally:
+        conn.close()
+
+
+@app.post("/orders/{oid}/fill")
+def order_fill(request: Request, oid: int,
+               color_req: str = Form(""), customer_part_no: str = Form(""),
+               customer_ok_at: str = Form(""), customer_ok_note: str = Form(""),
+               po_no: str = Form(""), po_date: str = Form(""),
+               mold_no_done: str = Form(""), t0_done: str = Form("")):
+    """补录齐套清单里缺的项。空的输入不覆盖已有值。"""
+    me = current_user(request)
+    conn = db.connect()
+    try:
+        o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
+        if not o:
+            return go("/orders", err="未找到该订单")
+        sets, args, touched = [], [], []
+        for k, v in [("color_req", color_req), ("customer_part_no", customer_part_no),
+                     ("customer_ok_at", customer_ok_at), ("customer_ok_note", customer_ok_note),
+                     ("po_no", po_no), ("po_date", po_date)]:
+            if v.strip():
+                sets.append(f"{k}=?")
+                args.append(v.strip())
+                touched.append(k)
+        for k, v in [("mold_no_done", mold_no_done), ("t0_done", t0_done)]:
+            if v == "on":
+                sets.append(f"{k}=1")
+                touched.append(k)
+        if not sets:
+            return go(f"/orders/{oid}", err="没有需要更新的内容")
+        sets.append("updated_at=?")
+        args.extend([db.now_str(), oid])
+        conn.execute(f"UPDATE orders SET {', '.join(sets)} WHERE id=?", args)
+        log(conn, me, "补录信息", "order", oid, oid, "、".join(touched))
+        conn.commit()
+        return go(f"/orders/{oid}", ok="已保存")
     finally:
         conn.close()
 
@@ -710,6 +764,11 @@ async def handover_new(request: Request):
             return go(f"/orders/{oid}", err="该订单已有进行中的交接单，请处理完成后再提交")
         if not note:
             return go(f"/orders/{oid}", err="请填写本环节完成情况说明")
+        # 齐套校验：缺任何一项都不允许转出，避免把缺口推给下游
+        miss = [g for g in db.gate_check(conn, dict(o), cur["no"]) if not g["ok"]]
+        if miss:
+            names = "、".join(g["label"] for g in miss)
+            return go(f"/orders/{oid}", err=f"本环节还缺 {len(miss)} 项，无法转出：{names}")
         rnd = (conn.execute("SELECT MAX(round) m FROM handovers WHERE order_id=? AND from_stage=?",
                             (oid, cur["no"])).fetchone()["m"] or 0) + 1
         ts = db.now_str()
@@ -841,6 +900,112 @@ def handover_accept(request: Request, hid: int, note: str = Form("")):
             f"第 {h['to_stage']} 环 {to_info['name']} 开始")
         conn.commit()
         return go(f"/orders/{h['order_id']}", ok=f"已签收，订单进入第 {h['to_stage']} 环节")
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------- RP 打样单
+
+@app.get("/rp", response_class=HTMLResponse)
+def rp_list(request: Request, tab: str = "open"):
+    conn = db.connect()
+    try:
+        rows = []
+        for r in conn.execute(
+            """SELECT r.*, o.code AS order_code, o.product_name, d.design_no, d.doc_type,
+                      v.version_no, v.status AS ver_status
+               FROM rp_requests r
+               JOIN orders o ON o.id=r.order_id
+               LEFT JOIN documents d ON d.id=r.document_id
+               LEFT JOIN doc_versions v ON v.id=r.version_id
+               ORDER BY CASE r.status WHEN 'open' THEN 0 WHEN 'making' THEN 1 ELSE 2 END,
+                        r.id DESC""").fetchall():
+            d = dict(r)
+            d["stage_info"] = db.stage(
+                conn.execute("SELECT current_stage FROM orders WHERE id=?", (r["order_id"],)).fetchone()[0])
+            rows.append(d)
+        if tab == "open":
+            rows = [r for r in rows if r["status"] in ("open", "making")]
+        orders = [dict(r) for r in conn.execute(
+            "SELECT id, code, product_name, color_req FROM orders WHERE status='active' ORDER BY id DESC").fetchall()]
+        # 打样必须挂到具体版本上，这里给出可选的版本清单
+        vers = [dict(r) for r in conn.execute(
+            """SELECT v.id, v.version_no, v.document_id, v.status, d.order_id, d.title, d.design_no
+               FROM doc_versions v JOIN documents d ON d.id=v.document_id
+               WHERE v.status IN ('published','draft')
+               ORDER BY d.order_id DESC, d.id, v.version_no DESC""").fetchall()]
+        return render(request, "rp.html", rows=rows, tab=tab, orders=orders, vers=vers)
+    finally:
+        conn.close()
+
+
+@app.post("/rp/new")
+def rp_new(request: Request, order_id: int = Form(...), version_id: int = Form(0),
+           purpose: str = Form(""), color_req: str = Form(""), lens_spec: str = Form(""),
+           qty: int = Form(1), due_date: str = Form(""), handler: str = Form(""),
+           note: str = Form("")):
+    me = current_user(request)
+    conn = db.connect()
+    try:
+        o = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+        if not o:
+            return go("/rp", err="未找到该订单")
+        if not purpose.strip():
+            return go("/rp", err="请写明这次打样要确认什么")
+        if not color_req.strip():
+            return go("/rp", err="做色要求必填：没有它打出来的样大概率要重做")
+        if not version_id:
+            return go("/rp", err="请选择打样依据的图档版本")
+        v = conn.execute("SELECT * FROM doc_versions WHERE id=?", (version_id,)).fetchone()
+        if not v:
+            return go("/rp", err="所选版本不存在")
+        if v["status"] == "obsolete":
+            return go("/rp", err="不能按已作废版本打样")
+        ts = db.now_str()
+        # 沿用车间习惯的 090xxx 流水号，接在已有最大号之后
+        mrow = conn.execute(
+            "SELECT MAX(CAST(SUBSTR(code,4) AS INTEGER)) m FROM rp_requests WHERE code LIKE 'RP-090%'"
+        ).fetchone()
+        n = (mrow["m"] or 309) + 1
+        code = f"RP-{n:06d}"
+        while conn.execute("SELECT 1 FROM rp_requests WHERE code=?", (code,)).fetchone():
+            n += 1
+            code = f"RP-{n:06d}"
+        rid = conn.execute(
+            """INSERT INTO rp_requests(code,order_id,document_id,version_id,purpose,color_req,lens_spec,
+                                       qty,due_date,handler,status,note,created_by,created_by_name,created_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?)""",
+            (code, order_id, v["document_id"], version_id, purpose.strip(), color_req.strip(),
+             lens_spec.strip(), max(1, qty), due_date, handler.strip(), note.strip(),
+             me["id"], me["name"], ts)).lastrowid
+        log(conn, me, "开打样单", "rp", rid, order_id,
+            f"{code} {o['product_name']} 按 v{v['version_no']} 打 {qty} 只")
+        conn.commit()
+        return go("/rp", ok=f"打样单 {code} 已开")
+    finally:
+        conn.close()
+
+
+@app.post("/rp/{rid}/status")
+def rp_status(request: Request, rid: int, status: str = Form(...)):
+    me = current_user(request)
+    conn = db.connect()
+    try:
+        r = conn.execute("SELECT * FROM rp_requests WHERE id=?", (rid,)).fetchone()
+        if not r:
+            return go("/rp", err="未找到该打样单")
+        if status not in db.RP_STATUS:
+            return go("/rp", err="状态不合法")
+        ts = db.now_str()
+        if status == "done":
+            conn.execute("UPDATE rp_requests SET status='done', done_at=?, done_by_name=? WHERE id=?",
+                         (ts, me["name"], rid))
+        else:
+            conn.execute("UPDATE rp_requests SET status=? WHERE id=?", (status, rid))
+        log(conn, me, "打样进度", "rp", rid, r["order_id"],
+            f"{r['code']} → {db.RP_STATUS[status]}")
+        conn.commit()
+        return go("/rp", ok=f"{r['code']} 已更新为{db.RP_STATUS[status]}")
     finally:
         conn.close()
 
