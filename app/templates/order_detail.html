@@ -144,7 +144,7 @@
               </td>
               <td>
                 {% if d.ver %}
-                  <span class="mono" style="color:var(--teal);font-weight:700">v{{ d.ver.version_no }}</span>
+                  <span class="mono" style="color:var(--teal);font-weight:700;font-size:14px">v{{ d.ver.version_no }}</span>
                   <span class="pill p-{{ d.ver.status }}">{{ VER_STATUS.get(d.ver.status) }}</span>
                 {% else %}<span class="tag">暂无正式版</span>{% endif %}
                 <div class="xs dim">{{ d.n_ver }} 个版本</div>
@@ -191,7 +191,7 @@
     <div class="card" style="margin-bottom:16px">
       <div class="hd"><h3>客户需求</h3></div>
       <div class="bd">
-        <p class="sm" style="margin:0;white-space:pre-wrap">{{ o.requirements or '业务部未填写需求说明。' }}</p>
+        <p style="margin:0;font-size:13px;line-height:1.75;white-space:pre-wrap">{{ o.requirements or '业务部未填写需求说明。' }}</p>
         {% if o.note %}<div class="hr"></div><div class="xs dim">{{ o.note }}</div>{% endif %}
       </div>
     </div>

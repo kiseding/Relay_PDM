@@ -34,9 +34,10 @@
       <div style="display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line2)">
         <span class="pill p-pending">待审批</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px"><a href="/handovers/{{ h.id }}">{{ h.code }}</a>
-            <span class="dim">·</span> {{ h.order_code }} {{ h.product_name }}</div>
-          <div class="xs dim">{{ stage(h.from_stage).name }} → {{ stage(h.to_stage).name }} · {{ h.submitter_name }} 提交 · {{ h.submitted_at[:16] }}</div>
+          <div class="todo-main"><b>{{ h.product_name }}</b>
+            <span class="xs dim">{{ h.order_code }}</span></div>
+          <div class="todo-sub"><a href="/handovers/{{ h.id }}" class="mono">{{ h.code }}</a>
+            · {{ stage(h.from_stage).name }} → {{ stage(h.to_stage).name }} · {{ h.submitter_name }} 提交 {{ h.submitted_at[5:16] }}</div>
         </div>
         <a class="btn sm primary" href="/handovers/{{ h.id }}">审批</a>
       </div>
@@ -49,9 +50,10 @@
       <div style="display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line2)">
         <span class="pill p-approved">待签收</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px"><a href="/handovers/{{ o.ho.id }}">{{ o.ho.code }}</a>
-            <span class="dim">·</span> {{ o.code }} {{ o.product_name }}</div>
-          <div class="xs dim">上一环节 {{ stage(o.ho.from_stage).name }} 已审批，签收后进入本环节</div>
+          <div class="todo-main"><b>{{ o.product_name }}</b>
+            <span class="xs dim">{{ o.code }}</span></div>
+          <div class="todo-sub"><a href="/handovers/{{ o.ho.id }}" class="mono">{{ o.ho.code }}</a>
+            · 上一环节 {{ stage(o.ho.from_stage).name }} 已审批，签收后进入本环节</div>
         </div>
         <a class="btn sm primary" href="/handovers/{{ o.ho.id }}">签收</a>
       </div>
@@ -64,8 +66,9 @@
       <div style="display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line2)">
         <span class="pill p-current">第 {{ o.stage_info.no }} 环</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px"><a href="/orders/{{ o.id }}">{{ o.code }}</a> {{ o.product_name }}</div>
-          <div class="xs dim">{{ o.stage_info.name }} · {{ o.stage_info.do }} · 交期 {{ o.due_date or '未定' }}</div>
+          <div class="todo-main"><b>{{ o.product_name }}</b>
+            <span class="xs dim">{{ o.code }}</span></div>
+          <div class="todo-sub">{{ o.stage_info.name }} · {{ o.stage_info.do }} · 交期 {{ o.due_date or '未定' }}</div>
         </div>
         <a class="btn sm" href="/orders/{{ o.id }}">处理</a>
       </div>

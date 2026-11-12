@@ -23,7 +23,7 @@
           <span class="tag dept-{{ to_info.dept }}">{{ '%02d'|format(to_info.no) }} {{ to_info.name }}</span>
           {% if h.round > 1 %}<span class="pill p-rejected">第 {{ h.round }} 轮</span>{% endif %}
         </div>
-        <p class="sm" style="margin:12px 0 0;padding:10px 12px;background:var(--panel2);border-radius:8px;border-left:3px solid var(--teal)">
+        <p style="margin:12px 0 0;padding:11px 13px;font-size:13px;line-height:1.7;background:var(--panel2);border-radius:8px;border-left:3px solid var(--teal)">
           {{ h.note }}
         </p>
         <div class="hr"></div>
@@ -55,7 +55,7 @@
               <td><b>{{ it.doc_title }}</b><div class="xs dim">{{ it.doc_type }} · {{ it.file_name }}</div></td>
               <td class="mono xs">{{ it.design_no }}</td>
               <td class="mono xs">{{ it.mold_no or '—' }}</td>
-              <td class="mono sm" style="color:var(--teal);font-weight:700">v{{ it.version_no }}</td>
+              <td class="mono" style="color:var(--teal);font-weight:700;font-size:13.5px">v{{ it.version_no }}</td>
               <td><a class="btn sm" href="/files/{{ it.stored_name }}">下载</a></td>
             </tr>
           {% endfor %}

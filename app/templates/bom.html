@@ -22,7 +22,7 @@
     <div class="f">图档已发布，或该零件无需图档</div></div>
   <div class="stat warn"><div class="k"><span class="lamp warn"></span> 缺图</div><div class="v">{{ lamps.warn }}</div>
     <div class="f">BOM 已登记但未关联图档</div></div>
-  <div class="stat" style="border-color:var(--redline)"><div class="k"><span class="lamp bad"></span> 未发布</div><div class="v" style="color:var(--red)">{{ lamps.bad }}</div>
+  <div class="stat"{% if lamps.bad %} style="border-color:var(--redline)"{% endif %}><div class="k"><span class="lamp bad"></span> 未发布</div><div class="v"{% if lamps.bad %} style="color:var(--red)"{% endif %}>{{ lamps.bad }}</div>
     <div class="f">已关联图档，但当前版本为草稿或已作废</div></div>
 </div>
 

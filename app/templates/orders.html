@@ -51,7 +51,7 @@
             {% if o.status == 'closed' %}<span class="tag">已结案</span>{% endif %}</td>
           <td><b>{{ o.product_name }}</b><div class="xs dim">{{ o.customer_name or '—' }}</div></td>
           <td>
-            <span class="tag dept-{{ o.stage_info.dept }}">{{ '%02d'|format(o.stage_info.no) }} {{ o.stage_info.name }}</span>
+            <span class="tag dept-{{ o.stage_info.dept }}" style="font-weight:650;font-size:11.5px">{{ '%02d'|format(o.stage_info.no) }} {{ o.stage_info.name }}</span>
           </td>
           <td class="mid">{{ o.doc_count }}</td>
           <td class="mid">{{ o.bom_count }}</td>

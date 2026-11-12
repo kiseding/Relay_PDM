@@ -24,7 +24,7 @@
           <td class="mono" style="font-size:12px">{{ d.design_no }}</td>
           <td class="mono" style="font-size:12px">{{ d.mold_no or '—' }}</td>
           <td class="xs dim">{{ d.aliases or '—' }}</td>
-          <td>{% if d.ver %}<span class="mono" style="color:var(--teal);font-weight:700">v{{ d.ver.version_no }}</span>
+          <td>{% if d.ver %}<span class="mono" style="color:var(--teal);font-weight:700;font-size:14px">v{{ d.ver.version_no }}</span>
             <span class="pill p-{{ d.ver.status }}">{{ VER_STATUS.get(d.ver.status) }}</span>
             {% else %}<span class="tag">暂无正式版</span>{% endif %}</td>
           <td class="xs">{{ d.order_code or '—' }}</td>

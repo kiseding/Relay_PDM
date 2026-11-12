@@ -30,7 +30,7 @@
     </div>
     <div class="kb-body">
       {% for c in col.cards %}
-      <a class="kb-card" href="/orders/{{ c.o.id }}">
+      <a class="kb-card {{ c.level }}" href="/orders/{{ c.o.id }}">
         <div class="kb-top">
           <span class="kb-no">{{ c.o.code }}</span>
           <span class="kb-days {{ c.level }}">{{ c.days }}天</span>

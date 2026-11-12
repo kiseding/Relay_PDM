@@ -24,7 +24,7 @@
         <span class="hint">历史版本不会被覆盖，仅可新增</span></div>
       <div class="bd">
         {% for v in vers %}
-        <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line2)">
+        <div class="verrow{{ ' cur' if d.current_version_id == v.id else '' }}">
           <div style="flex:0 0 54px">
             <div class="mono" style="font-size:17px;font-weight:700;color:{{ 'var(--teal)' if d.current_version_id == v.id else 'var(--faint)' }}">v{{ v.version_no }}</div>
             {% if d.current_version_id == v.id %}<div class="xs nowrap" style="color:var(--teal)">当前版本</div>{% endif %}
