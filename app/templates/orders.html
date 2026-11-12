@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}订单{% endblock %}
+{% block head %}订单{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="t">所有订单</div>
+    <div class="d">一张单从头走到尾，进度就在环节条上</div>
+  </div>
+  <div class="sp"></div>
+  <button class="btn primary" onclick="document.getElementById('neworder').open=true">＋ 接单</button>
+</div>
+
+<details class="card" id="neworder" style="margin-bottom:16px">
+  <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">＋ 新接一张单</summary>
+  <form method="post" action="/orders/new" style="padding:0 16px 16px;border-top:1px solid var(--line2)">
+    <div class="row" style="margin-top:14px">
+      <div><label class="fl">客户</label><input type="text" name="customer_name" placeholder="宏昌实业"></div>
+      <div><label class="fl">产品 / 项目名 *</label><input type="text" name="product_name" required placeholder="电饭煲上盖注塑模"></div>
+      <div><label class="fl">交期</label><input type="date" name="due_date"></div>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label class="fl">客户到底要什么（越具体，后面扯皮越少）</label>
+      <textarea name="requirements" placeholder="外观件，A 面高光；卡扣要能一次脱模；材质 ABS+PC；客户已给 3D 和 2D 各一份。"></textarea>
+      <div class="hintline">业务员不写清楚，后面每个人都要来问你一遍。这一栏就是拿来堵这个洞的。</div>
+    </div>
+    <button class="btn primary" type="submit">建单</button>
+  </form>
+</details>
+
+<div class="flexr" style="margin-bottom:12px;gap:6px;flex-wrap:wrap">
+  <a class="btn sm {{ 'primary' if not cur_s else '' }}" href="/orders">全部</a>
+  {% for s in STAGES %}
+  <a class="btn sm {{ 'primary' if cur_s == s.no else '' }}" href="/orders?s={{ s.no }}">{{ '%02d'|format(s.no) }} {{ s.name }}</a>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="bd tight">
+    <table>
+      <thead><tr>
+        <th style="width:126px">单号</th><th>产品 / 客户</th><th style="width:150px">现在在谁手上</th>
+        <th class="mid" style="width:62px">图档</th><th class="mid" style="width:62px">BOM</th>
+        <th style="width:96px">交期</th><th style="width:110px">最近更新</th>
+      </tr></thead>
+      <tbody>
+      {% for o in rows %}
+        <tr>
+          <td><a href="/orders/{{ o.id }}" class="mono">{{ o.code }}</a>
+            {% if o.status == 'closed' %}<span class="tag">已结案</span>{% endif %}</td>
+          <td><b>{{ o.product_name }}</b><div class="xs dim">{{ o.customer_name or '—' }}</div></td>
+          <td>
+            <span class="tag dept-{{ o.stage_info.dept }}">{{ '%02d'|format(o.stage_info.no) }} {{ o.stage_info.name }}</span>
+          </td>
+          <td class="mid">{{ o.doc_count }}</td>
+          <td class="mid">{{ o.bom_count }}</td>
+          <td class="nowrap sm">{{ o.due_date or '—' }}</td>
+          <td class="nowrap xs dim">{{ o.updated_at[5:16] }}</td>
+        </tr>
+      {% endfor %}
+      {% if not rows %}
+        <tr><td colspan="7"><div class="empty"><div class="big">▤</div>这个环节没有单子</div></td></tr>
+      {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

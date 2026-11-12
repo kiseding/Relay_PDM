@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay PDM 系统设计说明</title>
+<style>
+  :root{
+    --ink:#0f172a; --ink2:#334155; --muted:#64748b; --faint:#94a3b8;
+    --line:#e2e8f0; --line2:#eef2f6;
+    --teal:#0f766e; --tealbg:#f0fdfa; --tealline:#99f6e4;
+    --amber:#b45309; --amberbg:#fffbeb; --amberline:#fde68a;
+    --blue:#1d4ed8; --bluebg:#eff6ff; --blueline:#bfdbfe;
+    --red:#b91c1c; --redbg:#fef2f2;
+    --violet:#7e22ce; --violetbg:#faf5ff;
+    --orange:#c2410c; --orangebg:#fff7ed;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:#f5f6f8; color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px; line-height:1.75; -webkit-font-smoothing:antialiased;
+  }
+  .paper{
+    max-width:960px; margin:32px auto 80px; background:#fff;
+    border:1px solid var(--line); border-radius:16px;
+    padding:56px 60px 64px;
+    box-shadow:0 1px 2px rgba(15,23,42,.04),0 12px 32px -12px rgba(15,23,42,.10);
+  }
+
+  /* ---------- header ---------- */
+  .kicker{
+    display:inline-block; font-size:12px; letter-spacing:.08em; color:var(--teal);
+    background:var(--tealbg); border:1px solid var(--tealline);
+    padding:3px 10px; border-radius:999px; font-weight:600;
+  }
+  h1{font-size:40px; line-height:1.2; margin:18px 0 10px; letter-spacing:-.02em; font-weight:700}
+  .lede{font-size:17px; color:var(--ink2); margin:0 0 22px; max-width:672px}
+  .meta{
+    display:flex; flex-wrap:wrap; gap:8px 24px; font-size:12.5px; color:var(--muted);
+    border-top:1px solid var(--line2); padding-top:16px;
+  }
+  .meta b{color:var(--ink2); font-weight:600}
+
+  /* ---------- sections ---------- */
+  section{margin-top:52px}
+  .sec-head{display:flex; align-items:flex-start; gap:12px; margin-bottom:14px}
+  .sec-num{
+    flex:0 0 auto; width:26px; height:26px; border-radius:8px; margin-top:3px;
+    background:var(--teal); color:#fff; font-size:13px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+  }
+  h2{font-size:21px; margin:0; letter-spacing:-.01em; font-weight:650; line-height:1.5}
+  h3{font-size:15.5px; margin:26px 0 8px; font-weight:650; color:var(--ink)}
+  p{margin:10px 0}
+  .sub{color:var(--muted); font-size:13.5px; margin:-4px 0 12px}
+
+  /* ---------- table ---------- */
+  table{width:100%; border-collapse:collapse; font-size:13.5px; margin:14px 0 6px}
+  th{
+    text-align:left; font-weight:600; color:var(--ink2); background:#f8fafc;
+    padding:9px 11px; border-bottom:1px solid var(--line); font-size:12.5px;
+    letter-spacing:.01em; white-space:nowrap;
+  }
+  td{padding:10px 11px; border-bottom:1px solid var(--line2); vertical-align:top; color:var(--ink2)}
+  tr:last-child td{border-bottom:none}
+  td b,td strong{color:var(--ink); font-weight:600}
+  .num-col{width:26px; color:var(--faint); font-variant-numeric:tabular-nums}
+  .c{text-align:center}
+  .yes{color:#047857; font-weight:700}
+  .nope{color:#cbd5e1}
+  table.tight{font-size:12.5px}
+  table.tight td,table.tight th{padding:8px 9px}
+
+  /* ---------- vertical flow ---------- */
+  .vflow{position:relative; margin:22px 0 4px 20px; padding-left:28px}
+  .vflow:before{content:""; position:absolute; left:0; top:10px; bottom:10px; width:2px; background:#e9eef4}
+  .vs{position:relative; background:#fff; border:1px solid var(--line); border-radius:10px; padding:11px 15px; margin-bottom:8px}
+  .vs:before{
+    content:""; position:absolute; left:-34px; top:17px; width:9px; height:9px;
+    border-radius:50%; background:#fff; border:2px solid #cbd5e1; box-sizing:content-box;
+  }
+  .vs.mine{border-color:var(--tealline); background:var(--tealbg)}
+  .vs.mine:before{border-color:var(--teal); background:var(--teal)}
+  .vs-n{font-size:10.5px; color:var(--faint); letter-spacing:.08em; font-variant-numeric:tabular-nums}
+  .vs-t{font-size:14.5px; font-weight:650; margin-top:-2px; display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+  .vs-w{font-size:12.5px; color:var(--muted); margin-top:2px; line-height:1.55}
+  .dept{
+    font-size:10.5px; font-weight:600; padding:1px 7px; border-radius:5px;
+    background:#f1f5f9; color:#475569; border:1px solid #e8edf3;
+  }
+  .dept.d-sales{background:#eff6ff; color:#1d4ed8; border-color:#dbeafe}
+  .dept.d-id{background:#faf5ff; color:#7e22ce; border-color:#f3e8ff}
+  .dept.d-md{background:var(--tealbg); color:var(--teal); border-color:var(--tealline)}
+  .dept.d-eng{background:var(--orangebg); color:var(--orange); border-color:#fed7aa}
+  .dept.d-mold{background:#fef2f2; color:#b91c1c; border-color:#fecaca}
+  .dept.d-prod{background:#ecfdf5; color:#047857; border-color:#a7f3d0}
+
+  .vg{display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--faint); padding:0 0 9px 2px}
+  .vg b{
+    color:var(--amber); background:var(--amberbg); border:1px solid var(--amberline);
+    padding:0 6px; border-radius:4px; font-size:10.5px; font-weight:700; line-height:1.7;
+  }
+  .vg.cust b{color:#7e22ce; background:#faf5ff; border-color:#e9d5ff}
+
+  /* ---------- callout ---------- */
+  .callout{
+    border-left:3px solid var(--teal); background:var(--tealbg);
+    padding:14px 18px; border-radius:0 8px 8px 0; margin:18px 0; font-size:14px;
+  }
+  .callout.warn{border-left-color:var(--amber); background:var(--amberbg)}
+  .callout .h{font-weight:650; font-size:13.5px; margin-bottom:4px; color:var(--ink)}
+  .callout p{margin:4px 0}
+
+  /* ---------- pills ---------- */
+  .states{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:16px 0}
+  .pill{
+    display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+    padding:4px 11px; border-radius:999px; border:1px solid transparent;
+  }
+  .p-draft{background:#f1f5f9; color:#475569; border-color:#e2e8f0}
+  .p-pending{background:var(--amberbg); color:var(--amber); border-color:var(--amberline)}
+  .p-approved{background:#ecfdf5; color:#047857; border-color:#a7f3d0}
+  .p-rejected{background:var(--redbg); color:var(--red); border-color:#fecaca}
+  .p-current{background:var(--teal); color:#fff}
+  .s-arrow{color:var(--faint); font-size:13px}
+
+  /* ---------- mockup ---------- */
+  .mock{
+    border:1px solid var(--line); border-radius:12px; overflow:hidden;
+    margin:18px 0; font-size:13px; background:#fff;
+  }
+  .mock-top{background:#f8fafc; border-bottom:1px solid var(--line); padding:7px 14px; font-size:11.5px; color:var(--faint); letter-spacing:.04em}
+  .mock-body{padding:16px 18px}
+  .m-title{font-size:15px; font-weight:650; display:flex; align-items:center; gap:8px}
+  .tag{font-size:11px; padding:1px 7px; border-radius:5px; background:#f1f5f9; color:#475569; font-weight:500; border:1px solid #e8edf3}
+  .m-nos{
+    display:flex; align-items:center; gap:9px; margin-top:10px; flex-wrap:wrap;
+    font-family:"SF Mono",Consolas,"Courier New",monospace; font-size:12.5px;
+  }
+  .no-box{border:1px solid var(--line); border-radius:6px; padding:3px 9px; background:#fcfdfe}
+  .no-box i{font-style:normal; color:var(--faint); font-family:inherit; font-size:10.5px; display:block; line-height:1.2}
+  .no-box b{font-weight:600; color:var(--ink); letter-spacing:.01em}
+  .m-state{
+    margin-top:14px; padding-top:12px; border-top:1px dashed var(--line);
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .vbig{font-size:22px; font-weight:700; color:var(--teal); font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+
+  .vl{list-style:none; padding:0; margin:10px 0 0}
+  .vl li{display:flex; align-items:flex-start; gap:12px; padding:11px 0; border-bottom:1px solid var(--line2)}
+  .vl li:last-child{border-bottom:none}
+  .vl .vn{flex:0 0 42px; font-family:Consolas,monospace; font-weight:700; font-size:14px; color:var(--muted)}
+  .vl .vn.cur{color:var(--teal)}
+  .vl .vbody{flex:1 1 auto; min-width:0}
+  .vl .vt{font-size:13px; color:var(--ink2); line-height:1.6}
+  .vl .vm{font-size:11.5px; color:var(--faint); margin-top:3px}
+  .badges{display:flex; gap:5px; flex-wrap:wrap; margin-top:5px}
+
+  /* ---------- stage bar ---------- */
+  .stepbar{display:flex; gap:0; align-items:flex-start; margin:4px 0 2px; flex-wrap:wrap}
+  .sbi{flex:1 1 0; min-width:66px; position:relative; padding-top:16px}
+  .sbi .dot{position:absolute; top:0; left:0; width:8px; height:8px; border-radius:50%; background:#e2e8f0; border:2px solid #fff; box-shadow:0 0 0 1px #e2e8f0}
+  .sbi .bar{position:absolute; top:4px; left:11px; right:0; height:2px; background:#eef2f6}
+  .sbi:last-child .bar{display:none}
+  .sbi.done .dot{background:var(--teal); box-shadow:0 0 0 1px var(--teal)}
+  .sbi.done .bar{background:var(--tealline)}
+  .sbi.now .dot{background:#fff; border:2px solid var(--teal); box-shadow:0 0 0 3px var(--tealbg)}
+  .sbi .lb{font-size:10.5px; font-weight:600; color:var(--ink2); line-height:1.35}
+  .sbi.pend .lb{color:#cbd5e1}
+  .sbi .dt{font-size:9.5px; color:var(--faint); line-height:1.4; margin-top:1px}
+
+  /* ---------- grids ---------- */
+  .cols2{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0}
+  .card{border:1px solid var(--line); border-radius:10px; padding:14px 16px}
+  .card .ct{font-size:13.5px; font-weight:650; margin-bottom:4px}
+  .card .cd{font-size:12.5px; color:var(--muted); line-height:1.65}
+  .card.no{border-color:#fecaca; background:#fffafa}
+  .card.no .ct{color:var(--red)}
+  .card.yes{border-color:#a7f3d0; background:#fbfffd}
+
+  ul.plain{margin:10px 0; padding-left:20px}
+  ul.plain li{margin:5px 0; color:var(--ink2); font-size:14px}
+  ul.plain li b{color:var(--ink)}
+
+  .kbd{
+    font-family:Consolas,monospace; font-size:12px; background:#f8fafc;
+    border:1px solid var(--line); border-bottom-width:2px; border-radius:5px;
+    padding:1px 6px; color:var(--ink2); white-space:nowrap;
+  }
+  code{
+    font-family:Consolas,"SF Mono",monospace; font-size:12.5px;
+    background:#f8fafc; border:1px solid var(--line2); border-radius:4px;
+    padding:1px 5px; color:#0f766e;
+  }
+  /* ---------- bom ---------- */
+  table.bom{margin:0; font-size:12.5px}
+  table.bom td{padding:7px 9px; border-bottom:1px solid var(--line2)}
+  table.bom .lv1 td{font-weight:650; color:var(--ink); background:#fcfdfe}
+  table.bom .lv2 td:first-child{padding-left:24px}
+  table.bom .lv3 td:first-child{padding-left:40px}
+  table.bom .lv2 td,table.bom .lv3 td{color:var(--ink2)}
+  table.bom .dim{color:var(--faint)}
+  table.bom .warnrow{background:#fffdf5}
+  .lamp{display:inline-block; width:8px; height:8px; border-radius:50%; vertical-align:middle}
+  .lamp.ok{background:#10b981; box-shadow:0 0 0 3px #ecfdf5}
+  .lamp.warn{background:#f59e0b; box-shadow:0 0 0 3px #fffbeb}
+  .lamp.bad{background:#ef4444; box-shadow:0 0 0 3px #fef2f2}
+
+  footer{
+    margin-top:56px; padding-top:20px; border-top:1px solid var(--line);
+    font-size:12px; color:var(--faint); display:flex; justify-content:space-between;
+  }
+  @media (max-width:760px){
+    .paper{margin:0; border-radius:0; border:none; padding:28px 20px 40px}
+    h1{font-size:30px}
+    .cols2{grid-template-columns:1fr}
+    table{font-size:12.5px}
+    th,td{padding:8px}
+  }
+  @media print{
+    body{background:#fff}
+    .paper{box-shadow:none; border:none; margin:0; padding:0; max-width:none}
+    section{page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="paper">
+
+  <header>
+    <span class="kicker">Relay PDM · 系统设计说明 v0.5</span>
+    <h1>Relay PDM</h1>
+    <p class="lede"><b>One drawing, one truth, hand to hand.</b> 业务 → 设计部（外观、结构）→ 工程部 → 模具部 → 生产部。七个环节，六道审批门。这套系统只干一件事——让每一次交接都有版本、有签字、查得到。</p>
+    <div class="meta">
+      <span><b>编写</b> 2026-11-13</span>
+      <span><b>状态</b> 最终结构，等你点头</span>
+      <span><b>形态</b> 网页系统，Docker 一键部署</span>
+      <span><b>覆盖</b> 接单 → 外观 → 结构 → 开模准备 → 开模 → 工程图 → 量产</span>
+    </div>
+  </header>
+
+  <!-- 1 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <h2>它是什么，为什么不是买一套 PLM</h2>
+    </div>
+    <p>市面上的开源 PLM，比如 Cascadia、OdooPLM，解决的是「大型制造企业的产品结构管理」——BOM、物料、配置、多级审批、ERP 对接。它们的说明书里全是 ECO、Revision Letter、Effectivity 这类词，光培训就要一周。</p>
+    <p>而你的痛点是另一件事：<b>一个产品从接单到量产，外观改三轮、结构改五轮、工程部再改一轮，中间传了五个部门，最后没人说得清哪一版算数。</b>用通用 PLM 去解决这个，等于用起重机拧螺丝——不是不行，是拧不动。</p>
+    <div class="callout">
+      <div class="h">所以这套系统只做一件事</div>
+      <p>管住「交接」。谁交给谁、交的是第几版、谁签的字、后来为什么改——任何一条都能翻出来。就这一件事，做透。</p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <h2>五个部门，七个环节，你在第三环</h2>
+    </div>
+    <p>你的位置很关键：<b>前面是同事出的外观，后面是工程部定开模编号、做 BOM、出工程图，再后面才是模具部开模。</b>你的结构模型是整条线上唯一「既被外观约束、又约束开模」的东西，所以两边都找你要。</p>
+
+    <div class="vflow">
+      <div class="vs">
+        <div class="vs-n">01</div>
+        <div class="vs-t">接单 <span class="dept d-sales">业务部</span></div>
+        <div class="vs-w">客户需求、交期、材质、参考图、客户料号</div>
+      </div>
+      <div class="vg"><b>审批</b> 业务主管签字 → 流转</div>
+
+      <div class="vs">
+        <div class="vs-n">02</div>
+        <div class="vs-t">外观设计 <span class="dept d-id">设计部 · 外观</span></div>
+        <div class="vs-w">效果图、CMF（颜色/材质/工艺）、外观限制条件</div>
+      </div>
+      <div class="vg cust"><b>审批 + 客户</b> 主管通过，且客户选定外观方案 → 流转</div>
+
+      <div class="vs mine">
+        <div class="vs-n">03</div>
+        <div class="vs-t">结构设计 <span class="dept d-md">设计部 · 结构（你）</span></div>
+        <div class="vs-w">3D 建模、拆件、分模、2D 标注、结构图档</div>
+      </div>
+      <div class="vg"><b>审批</b> 设计主管签字 → 流转</div>
+
+      <div class="vs">
+        <div class="vs-n">04</div>
+        <div class="vs-t">开模准备 <span class="dept d-eng">工程部</span></div>
+        <div class="vs-w">定开模编号、BOM 清单、开模图、加工要求</div>
+      </div>
+      <div class="vg"><b>审批</b> 工程主管签字 → 流转</div>
+
+      <div class="vs">
+        <div class="vs-n">05</div>
+        <div class="vs-t">开模 <span class="dept d-mold">模具部</span></div>
+        <div class="vs-w">开模、试模、报加工问题与改模申请</div>
+      </div>
+      <div class="vg"><b>审批</b> 模具主管签字 → 流转</div>
+
+      <div class="vs">
+        <div class="vs-n">06</div>
+        <div class="vs-t">工程图发布 <span class="dept d-eng">工程部</span></div>
+        <div class="vs-w">正式工程图、BOM 定版、检验要求</div>
+      </div>
+      <div class="vg"><b>审批</b> 工程主管签字 → 流转</div>
+
+      <div class="vs">
+        <div class="vs-n">07</div>
+        <div class="vs-t">量产 <span class="dept d-prod">生产部</span></div>
+        <div class="vs-w">签收交付、按图生产大货</div>
+      </div>
+    </div>
+
+    <h3>每个部门在系统里干什么、能得到什么</h3>
+    <table>
+      <thead><tr><th style="width:86px">部门</th><th style="width:40%">他要做的事</th><th>他从系统里拿到什么（也是他不再找你的理由）</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>业务部</b></td>
+          <td>接单、填需求、上传客户原图和聊天截图、提客户变更、打「客户已确认」</td>
+          <td>这单到哪一步了、客户到底认了哪一版（带截图证据）</td>
+        </tr>
+        <tr>
+          <td><b>设计部·外观</b></td>
+          <td>上传效果图与外观方案、提外观变更、<b>拿你的结构模型去渲染</b></td>
+          <td>搜开模编号或设计编号，直接拿到当前模型，不用问你</td>
+        </tr>
+        <tr>
+          <td><b>设计部·结构<br>（你）</b></td>
+          <td>建图档、绑三个编号、3D 建模、分模、出图、上传版本、提交交接</td>
+          <td>待办清单（该出哪张、哪张被退回）、每个版本的完整历史、一键打包</td>
+        </tr>
+        <tr>
+          <td><b>工程部</b></td>
+          <td><b>定开模编号</b>、做 BOM、出开模图和工程图、报工程变更</td>
+          <td>结构图档的冻结版本、编号对照、BOM 与工程图的历史版本</td>
+        </tr>
+        <tr>
+          <td><b>模具部</b></td>
+          <td>签收开模包、开模、试模、报加工问题和改模申请</td>
+          <td>拿到的永远是冻结过、签过字的那一版，不是半路改过的</td>
+        </tr>
+        <tr>
+          <td><b>生产部</b></td>
+          <td>签收量产交付、按工程图生产</td>
+          <td>按开模编号/机台查图，拿到的是「已发布」那一版</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="h">你从「人肉路由器」变成「看一眼系统」</div>
+      <p>现在四个部门找你要东西，全靠微信吼。以后每个人自己搜编号、自己下载、自己看进度——只有真要改结构的时候才来找你。</p>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <h2>你说的每个抱怨，对应系统里的一个设计</h2>
+    </div>
+    <p class="sub">左边是你的原话，右边是它变成什么功能。这一节是整份文档的核心，其余都是配套。</p>
+    <table>
+      <thead>
+        <tr><th class="num-col">#</th><th style="width:34%">你现在遇到的问题</th><th>系统里怎么解决</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="num-col">1</td>
+          <td><b>版本混乱</b><br>图改了一堆，不知道哪个是最后一版</td>
+          <td>每次上传都自动成为新版本 <b>v1 / v2 / v3</b>，旧的永远保留。每个图档<b>只有一个「当前版本」</b>，顶部大字显示，不用猜。</td>
+        </tr>
+        <tr>
+          <td class="num-col">2</td>
+          <td><b>业务员无脑答应客户</b><br>「改成这样看看」，改完杳无音讯</td>
+          <td>任何改动都要先立<b>一张单</b>：谁提的、原话、从哪来的（微信/电话/会议）、客户认没认、最后采纳与否。<b>没有单子，不改图</b>。</td>
+        </tr>
+        <tr>
+          <td class="num-col">3</td>
+          <td><b>记不清客户最终确认的是哪版</b><br>要开模/渲染了，不知道拿哪个</td>
+          <td>「客户确认」挂在<b>具体某一版</b>上，不是挂在图档上。版本卡片直接写：<i>v2 · 已发布 · 客户 11-12 微信确认</i>。要开模/渲染，照着这版拿。</td>
+        </tr>
+        <tr>
+          <td class="num-col">4</td>
+          <td><b>工程部用开模编号找你</b><br>「M-2601-A 那套给我」，你一脸懵逼</td>
+          <td>因为开模编号是<b>工程部定的</b>，他们按这个号记项目。系统里三个号绑在同一张图档上，<b>谁编的号谁录入</b>。搜开模编号，直接出设计编号和当前版本。</td>
+        </tr>
+        <tr>
+          <td class="num-col">5</td>
+          <td><b>业务员需求信息不全</b><br>还要追着问材质、交期、外观要求</td>
+          <td>接单表单把必填项<b>钉死</b>：客户、产品、材质、交期、外观要求、参考图。缺一项提交不了，责任回到提需求的人身上。</td>
+        </tr>
+        <tr>
+          <td class="num-col">6</td>
+          <td><b>模具部说「这个位置加工不到」</b><br>口头讲两句，改完没人记得为什么改</td>
+          <td><b>改模单</b>：模具部自己提，写清楚是哪个面、加工不了还是试模缩水。改完的版本挂在单子上，以后追溯得到原因。</td>
+        </tr>
+        <tr>
+          <td class="num-col">7</td>
+          <td><b>外观同事拿你的图去渲染</b><br>你也不知道他手上那版是不是最新的</td>
+          <td>给设计部内部也开<b>交接单</b>（接收方：外观-渲染用），冻结当时版本。他拿错了，是他的单子过期了，不是你没给。</td>
+        </tr>
+        <tr>
+          <td class="num-col">8</td>
+          <td><b>交出去的东西没人签字</b><br>出了问题说不清是谁放的</td>
+          <td>每一环交接前<b>必须主管审批</b>，审批通过才流转，下一环签收才算完。全程带时间戳，赖不掉。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 4 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <h2>核心机制：一张「交接单」管一次流转</h2>
+    </div>
+    <p>整套系统只有这一个核心动作，其他都是围着它转。你干完活，不是「点一下完成」，而是<b>填一张交接单</b>。</p>
+
+    <h3>一张交接单上有什么</h3>
+    <table class="tight">
+      <thead><tr><th style="width:110px">字段</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><b>交给谁</b></td><td>下一个环节（工程部 / 模具部 / 生产部），系统按顺序默认好，一般不用改</td></tr>
+        <tr><td><b>交什么</b></td><td>勾选要交的图档版本，默认勾上本环节的最新版；<b>提交那一刻就冻结</b>，后面再改图不影响这张单</td></tr>
+        <tr><td><b>说明</b></td><td>一句话：交了什么、有什么要提醒下一环的</td></tr>
+        <tr><td><b>本部门审批</b></td><td>提交后进主管待办；通过 → 流转；驳回 → 退回给你，写原因</td></tr>
+        <tr><td><b>下一环签收</b></td><td>对方点「收到」，签收人和时间记下来，这一环才算真交出去</td></tr>
+      </tbody>
+    </table>
+
+    <h3>一张交接单的一生</h3>
+    <div class="states">
+      <span class="pill p-draft">我提交</span><span class="s-arrow">→</span>
+      <span class="pill p-pending">待主管审批</span><span class="s-arrow">→</span>
+      <span class="pill p-pending">待对方签收</span><span class="s-arrow">→</span>
+      <span class="pill p-approved">已完成</span>
+      <span style="font-size:12px;color:#94a3b8;margin-left:8px">（主管驳回 →</span>
+      <span class="pill p-rejected">退回重做</span><span style="font-size:12px;color:#94a3b8">）</span>
+    </div>
+
+    <div class="callout">
+      <div class="h">为什么审批做成「一张单」而不是「一个个文件签」</div>
+      <p>主管签字签的是<b>「这一批可以交出去了」</b>，不是逐张画押。所以审批挂在交接单上，一次签一批。这也顺带解决了一个大问题——<b>只有随交接单发布过的版本才算「正式版」</b>，你自己传的草稿永远不算数。</p>
+    </div>
+
+    <h3>退回怎么办</h3>
+    <p>主管驳回会写原因，单子回到你手上，状态变「退回重做」。你改完重新提交，<b>生成第 2 轮</b>，第 1 轮原样留在记录里——谁驳的、为什么驳、改了什么，全在。</p>
+  </section>
+
+  <!-- 5 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <h2>版本规则：整套系统的地基</h2>
+    </div>
+    <p>规则只有五条，但要严格执行。</p>
+
+    <h3>5.1 版本只有三个状态</h3>
+    <div class="states">
+      <span class="pill p-draft">草稿</span><span class="s-arrow">→ 随交接单审批通过 →</span>
+      <span class="pill p-approved">已发布</span><span class="s-arrow">→ 被新版本取代 →</span>
+      <span class="pill p-draft">已作废</span>
+    </div>
+    <ul class="plain">
+      <li><b>草稿</b>：刚传上去，只有你和主管看得到，<b>不算数</b>，别人下载不到。</li>
+      <li><b>已发布</b>：随交接单一起被主管批准，从这一刻起才算正式版。</li>
+      <li><b>已作废</b>：有了更新版本，老版本标记作废，但文件永远保留，随时能下载来看。</li>
+    </ul>
+
+    <h3>5.2 只有「已发布」的版本，才能成为「当前版本」</h3>
+    <p>当前版本是唯一一个。别人问「最新是哪版」，答案永远只有一个。草稿不算最新。</p>
+
+    <h3>5.3 「客户确认」是独立的一票</h3>
+    <p>主管通过 ≠ 客户认了。所以版本上还有第二个标记：<span class="pill p-approved">客户已确认</span>，由业务员打，必须写清楚<b>怎么确认的</b>——微信截图 / 邮件 / 会议纪要。</p>
+    <p style="font-size:13.5px;color:#64748b">提交外观或结构交接时，如果这批图里没有客户确认过的版本，系统会弹一句「这批图客户还没确认，确定要交吗？」——提醒一下，但你可以确认后继续（有时候客户口头答应了，先干起来）。</p>
+
+    <h3>5.4 改过的版本不能覆盖，只能新增</h3>
+    <p>系统里没有「覆盖上传」这个操作。你只能「上传新版本」，旧版本的文件、时间、上传人、校验码原样保留。</p>
+
+    <h3>5.5 进了交接单的版本，锁死</h3>
+    <p>一旦随交接单发出并被签收，这一版就<b>谁都不能删、不能改、不能替换文件</b>。要改？出 v4，重走一轮。</p>
+
+    <h3>5.6 长这样（界面草图）</h3>
+    <div class="mock">
+      <div class="mock-top">图档详情页顶部 · 别人问你「哪版算数」时给他看这个</div>
+      <div class="mock-body">
+        <div class="m-title">上盖本体 <span class="tag">结构3D</span><span class="tag">注塑件</span></div>
+        <div class="m-nos">
+          <span class="no-box"><i>设计编号</i><b>UG-2601-0113-01</b></span>
+          <span style="color:#94a3b8">⇄</span>
+          <span class="no-box"><i>开模编号</i><b>M-2601-A</b></span>
+          <span class="no-box"><i>客户料号</i><b>KL-8891</b></span>
+        </div>
+        <div class="m-state">
+          <span class="vbig">v2</span>
+          <span class="pill p-approved">已发布</span>
+          <span class="pill p-approved">客户已确认 · 11-12 微信</span>
+          <span style="font-size:12px;color:#94a3b8;margin-left:auto">by 你 · 11-12 15:40</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mock">
+      <div class="mock-top">同一页的版本列表 · 按时间倒序，谁改的、改了啥一目了然</div>
+      <div class="mock-body">
+        <ul class="vl">
+          <li>
+            <div class="vn cur">v2</div>
+            <div class="vbody">
+              <div class="vt">按改模单 BG-0001 把三个卡扣下移 3mm</div>
+              <div class="vm">你 · 11-12 15:40 · 上盖本体_v2.prt · 84.2 MB</div>
+              <div class="badges"><span class="pill p-approved">已发布</span><span class="pill p-approved">客户已确认</span><span class="pill p-current">当前版本</span></div>
+            </div>
+          </li>
+          <li>
+            <div class="vn">v1</div>
+            <div class="vbody">
+              <div class="vt">首版，按外观方案 A 建模</div>
+              <div class="vm">你 · 11-08 09:12 · 上盖本体_v1.prt · 82.9 MB</div>
+              <div class="badges"><span class="pill p-approved">已发布</span><span class="tag">已被 v2 取代</span></div>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <h2>三套编号，怎么对上</h2>
+    </div>
+    <p>这是整件事最别扭的地方：<b>同一张图，三个部门各叫一个名。</b>你按设计阶段编设计编号，工程部定开模编号，客户那边还有个料号。谁都没错，但中间的人在翻译。</p>
+    <table>
+      <thead><tr><th style="width:110px">编号</th><th style="width:96px">谁编的</th><th>什么时候出现</th><th>谁要用它</th></tr></thead>
+      <tbody>
+        <tr><td><b>设计编号</b></td><td>你（设计部）</td><td>结构建图档时</td><td>你、设计主管、工程部</td></tr>
+        <tr><td><b>开模编号</b></td><td><b>工程部</b></td><td>开模准备，工程部定号</td><td>工程部、模具部、生产部、<b>外观同事（渲染时用它指代）</b></td></tr>
+        <tr><td><b>客户料号</b></td><td>客户</td><td>接单时客户给的</td><td>业务、对账、查历史</td></tr>
+      </tbody>
+    </table>
+
+    <p><b>做法：一个图档，三个号都挂着。</b>谁编的号，谁负责录进系统——设计编号你录，开模编号工程部录，客户料号业务录。系统不强加任何编码规则。</p>
+
+    <div class="callout">
+      <div class="h">顶栏那个搜索框，是这套系统使用频率最高的地方</div>
+      <p>输入 <code>M-2601-A</code>、<code>UG-2601-0113-01</code>、<code>KL-8891</code>、甚至 <code>上盖</code>，都落到同一张图档上。工程部或外观同事再来问，你把搜索框甩给他——他自己搜，比问你快。</p>
+    </div>
+
+    <h3>开模编号可以后补</h3>
+    <p>建图档时<b>允许开模编号为空</b>——结构阶段还不知道开模号。工程部定了号，回填一下就行，历史版本不受影响。这样不会因为「必须先有开模号」卡住开工。</p>
+
+    <h3>找不到号怎么办</h3>
+    <p>搜索没结果时，页面给一个「这编号还没登记，帮我建一张图档」的入口，点进去编号已经填好了。避免有人搜不到就放弃了，继续在微信里问。</p>
+  </section>
+
+  <!-- 7 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">7</div>
+      <h2>BOM：一张看得懂的零件清单</h2>
+    </div>
+    <p class="sub">工程部在「开模准备」这一环定 BOM。别人只读，工程部能改。</p>
+
+    <p>先把话说清楚，免得你按 ERP 的期待来看它。</p>
+    <div class="cols2">
+      <div class="card yes">
+        <div class="ct">它做这四件事</div>
+        <div class="cd">
+          ① 列清这套模/这台产品由哪些零件组成<br>
+          ② 每件几个、什么材质、自制还是外购<br>
+          ③ 每个自制件对应哪张图（点编号直接跳过去）<br>
+          ④ 跟着交接单冻结，哪天定的版永久可查
+        </div>
+      </div>
+      <div class="card no">
+        <div class="ct">它不做这些</div>
+        <div class="cd">
+          不算采购量、不算成本、不扣库存<br>
+          不自动生成请购单、不做 MRP 运算<br>
+          不做无限层级的装配树
+        </div>
+      </div>
+    </div>
+
+    <h3>结构：三层封顶，够用就行</h3>
+    <p>用父子关系挂树，界面按层级缩进，序号自动排成 1 / 1.1 / 1.2。三层是硬上限 —— 再多就说明该上 ERP 了。</p>
+    <div class="mock">
+      <div class="mock-top">订单 DD-2026-0113 · BOM 第 3 版 · 工程部 陈工 维护</div>
+      <div class="mock-body">
+        <table class="bom">
+          <thead><tr><th style="width:34px">#</th><th style="width:29%">零件号</th><th>名称</th><th style="width:62px">数量</th><th style="width:56px">来源</th><th style="width:104px">对应图档</th><th style="width:34px">灯</th></tr></thead>
+          <tbody>
+            <tr class="lv1"><td>1</td><td><code>SP-2601-00</code></td><td>上盖组件</td><td>1 套</td><td><span class="tag">装配</span></td><td class="dim">—</td><td><span class="lamp ok"></span></td></tr>
+            <tr class="lv2"><td>1.1</td><td><code>UG-2601-0113-01</code></td><td>上盖本体</td><td>1 件</td><td><span class="tag">自制</span></td><td>v2 已发布</td><td><span class="lamp ok"></span></td></tr>
+            <tr class="lv2"><td>1.2</td><td><code>UG-2601-0113-02</code></td><td>上盖装饰圈</td><td>1 件</td><td><span class="tag">自制</span></td><td>v1 已发布</td><td><span class="lamp ok"></span></td></tr>
+            <tr class="lv3"><td>1.2.1</td><td><code>GB/T 818 M2×5</code></td><td>十字槽盘头螺钉</td><td>3 件</td><td><span class="tag">标准件</span></td><td class="dim">—</td><td><span class="lamp ok"></span></td></tr>
+            <tr class="lv2 warnrow"><td>1.3</td><td><code>UG-2601-0113-05</code></td><td>卡扣镶件</td><td>2 件</td><td><span class="tag">自制</span></td><td class="dim">未挂图档</td><td><span class="lamp warn"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3>那几盏灯，是这张表比 Excel 强的地方</h3>
+    <p>Excel 里的 BOM 是死的 —— 谁都不知道第 1.3 行那个零件到底有没有图。系统里每行自动检查：</p>
+    <ul class="plain">
+      <li><b>绿灯</b>：自制件挂上了图档，且那张图的当前版本是「已发布」。</li>
+      <li><b>黄灯</b>：自制件没挂图档。零件号写了，图在谁电脑上？没人知道。</li>
+      <li><b>红灯</b>：挂了图档，但那图当前版本还是草稿，或者已经作废。</li>
+    </ul>
+    <p>提交交接单时，黄灯红灯会弹提示，但<b>不硬卡</b> —— 现实里总有先干起来的单子。不过那一屏会一直挂着，直到有人补上。</p>
+
+    <h3>冻结：BOM 也跑不掉</h3>
+    <p>BOM 跟着订单走，随手能改。但每次提交交接单，当时的 BOM 会<b>整体存一份快照</b>，跟着交接单一起冻结。所以：</p>
+    <ul class="plain">
+      <li>第 3 环交给工程部时，BOM 是什么样，永久可查；</li>
+      <li>第 6 环交给生产部时，BOM 又是什么样，也永久可查；</li>
+      <li>两份能并排对比，改了什么一目了然。</li>
+    </ul>
+    <p>以后模具部说「图上这个镶件不是三个吗」，你不用再翻聊天记录 —— 调出签收那天的快照，对着看。</p>
+
+    <h3>能做的操作</h3>
+    <table class="tight">
+      <thead><tr><th style="width:30%">操作</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>加一行 / 加子件</td><td>填零件号、名称、数量、来源。子件自动缩进一级</td></tr>
+        <tr><td>从图档带出</td><td>选一张已有图档，编号和名称自动填。手抄就是错的开头</td></tr>
+        <tr><td>调顺序 / 删行</td><td>序号自动重排成 1、1.1、1.2 这种</td></tr>
+        <tr><td>导出 CSV</td><td>给采购、给车间、贴进 Excel 都行</td></tr>
+        <tr><td>看历史快照</td><td>每张交接单里都存着当时那一版，只读</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="h">为什么只做三层、只留这几个字段</div>
+      <p>你们的 BOM 是给「开模 + 生产」用的：知道有哪些件、几件、哪张图。不是给采购算成本、给仓库管库存的。字段越多，填的人越糊弄，最后整张表没人信。<b>先让它准，再谈全。</b></p>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">8</div>
+      <h2>界面只有七个页面</h2>
+    </div>
+    <p class="sub">刻意做少。每多一个页面，就多一次「这个该点哪」的犹豫。</p>
+    <table>
+      <thead><tr><th style="width:106px">页面</th><th>干什么</th><th style="width:30%">关键操作</th></tr></thead>
+      <tbody>
+        <tr><td><b>工作台</b></td><td>登录后第一眼：四张数字卡 + 「该我做的事」清单 + 最近动态。<b>每个部门看到的待办不一样</b></td><td>点待办直接跳过去</td></tr>
+        <tr><td><b>订单</b></td><td>所有单子。点进去是这一单的全部：七个环节的进度、交接单、变更单、图档、操作记录</td><td>接单、提变更、提交交接</td></tr>
+        <tr><td><b>图档</b></td><td>所有图档平铺，可按订单/类型/状态筛。<b>三个编号都显示</b></td><td>建图档、传新版本、看历史</td></tr>
+        <tr><td><b>交接</b></td><td>交接单列表：待我审批、待我签收、已完成。一眼看出卡在谁手上</td><td>审批、签收、查看清单</td></tr>
+        <tr><td><b>BOM</b></td><td>按订单列出零件清单，三层缩进、红黄绿灯、当前版本。<b>工程部可改，其他人只读</b></td><td>加行、从图档带出、导 CSV</td></tr>
+        <tr><td><b>动态</b></td><td>全公司操作流水，谁在什么时候干了什么</td><td>只读，按单号/人筛</td></tr>
+        <tr><td><b>设置</b></td><td>账号、部门、角色、清空演示数据</td><td>加人、改密码、调部门</td></tr>
+      </tbody>
+    </table>
+
+    <h3>订单详情页顶部</h3>
+    <div class="mock">
+      <div class="mock-top">七个点，谁都能一眼看出「这单卡在哪」</div>
+      <div class="mock-body">
+        <div class="stepbar">
+          <div class="sbi done"><div class="dot"></div><div class="bar"></div><div class="lb">接单</div><div class="dt">11-08</div></div>
+          <div class="sbi done"><div class="dot"></div><div class="bar"></div><div class="lb">外观</div><div class="dt">11-09</div></div>
+          <div class="sbi now"><div class="dot"></div><div class="bar"></div><div class="lb">结构</div><div class="dt">你</div></div>
+          <div class="sbi pend"><div class="dot"></div><div class="bar"></div><div class="lb">开模准备</div><div class="dt">—</div></div>
+          <div class="sbi pend"><div class="dot"></div><div class="bar"></div><div class="lb">开模</div><div class="dt">—</div></div>
+          <div class="sbi pend"><div class="dot"></div><div class="bar"></div><div class="lb">工程图</div><div class="dt">—</div></div>
+          <div class="sbi pend"><div class="dot"></div><div class="bar"></div><div class="lb">量产</div><div class="dt">—</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">9</div>
+      <h2>谁能干什么</h2>
+    </div>
+    <p class="sub">六个业务角色 + 主管 + 管理员。主管只管本部门的审批。</p>
+    <table class="tight">
+      <thead>
+        <tr>
+          <th style="width:24%">动作</th>
+          <th class="c">业务</th><th class="c">外观</th><th class="c">结构<br>（你）</th>
+          <th class="c">工程</th><th class="c">模具</th><th class="c">生产</th><th class="c">主管</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>建订单、填需求</td><td class="c yes">✓</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c yes">✓</td></tr>
+        <tr><td>上传外观方案 / 效果图</td><td class="c nope">—</td><td class="c yes">✓</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td></tr>
+        <tr><td>建结构图档、录设计编号</td><td class="c nope">—</td><td class="c nope">—</td><td class="c yes">✓</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td></tr>
+        <tr><td>录开模编号</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c yes">✓</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td></tr>
+        <tr><td>维护 BOM（增删零件行）</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c yes">✓</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td></tr>
+        <tr><td>上传开模图 / 工程图</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c yes">✓</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td></tr>
+        <tr><td>上传结构新版本</td><td class="c nope">—</td><td class="c nope">—</td><td class="c yes">✓</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td></tr>
+        <tr><td>提交交接单</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c nope">—</td></tr>
+        <tr><td>审批交接单</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c yes">✓</td></tr>
+        <tr><td>签收交接单</td><td class="c nope">—</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td></tr>
+        <tr><td>标记「客户已确认」</td><td class="c yes">✓</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c yes">✓</td></tr>
+        <tr><td>提变更单 / 改模单</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c nope">—</td></tr>
+        <tr><td>裁定变更采纳与否</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c nope">—</td><td class="c yes">✓</td></tr>
+        <tr><td>下载图档</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:12.5px;color:#64748b;margin-top:4px">主管只能审<b>本部门</b>提交的交接单：设计主管审外观和结构，工程主管审开模准备和工程图，依此类推。管理员可以审所有。</p>
+  </section>
+
+  <!-- 9 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">10</div>
+      <h2>技术选型与部署</h2>
+    </div>
+    <div class="cols2">
+      <div class="card yes">
+        <div class="ct">用这个</div>
+        <div class="cd">
+          后端 Python + FastAPI<br>
+          数据库 SQLite（单文件，零运维）<br>
+          前端原生 HTML/CSS/JS（无构建步骤）<br>
+          文件存本地磁盘，库里只存路径和校验码
+        </div>
+      </div>
+      <div class="card no">
+        <div class="ct">不用这个</div>
+        <div class="cd">
+          PostgreSQL / MySQL（几十个人，用不上）<br>
+          Vue / React 全家桶（构建链越短，坏得越少）<br>
+          MinIO / 对象存储（本地磁盘够快）<br>
+          Redis、消息队列、微服务
+        </div>
+      </div>
+    </div>
+    <p>整套系统<b>一个容器、一个数据目录</b>。备份就是把这个目录拷走，换机器就是把这个目录拷过去。</p>
+
+    <h3>部署方式（两条路，选一条）</h3>
+    <ul class="plain">
+      <li><b>有 Docker：</b><span class="kbd">docker compose up -d</span> → 浏览器打开 <code>http://服务器IP:8080</code>。数据在 <code>./data</code> 目录。</li>
+      <li><b>没 Docker：</b>装个 Python，<span class="kbd">pip install -r requirements.txt</span> 然后启动脚本，一样跑。适合先在自己电脑上试。</li>
+    </ul>
+
+    <div class="callout warn">
+      <div class="h">两个必须提前说的限制</div>
+      <p><b>1. UG 的 .prt 在浏览器里没法预览。</b>这是所有非原厂系统的通病。系统里只做文件名 + 版本号 + 下载，不做 3D 预览。换来的好处是：不用装任何插件。</p>
+      <p><b>2. BOM 是结构化的，但只到「清单」这一层。</b>零件、数量、材质、来源、对应图档，能查能冻能导出；但不做采购量核算、成本、库存——那是 ERP，不是这套系统该管的。</p>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">11</div>
+      <h2>这一版明确不做的事</h2>
+    </div>
+    <p class="sub">先说清楚不做什么，比承诺做什么更重要——免得你期待落空。</p>
+    <div class="cols2">
+      <div class="card no"><div class="ct">不做 MRP / 物料库 / 成本核算</div><div class="cd">BOM 只到「有哪些件、几件、哪张图」。采购量、库存、成本，那是 ERP 的活。</div></div>
+      <div class="card no"><div class="ct">不做 3D 在线预览</div><div class="cd">硬要做需要转 STEP→GLB，加一个转换服务，体积和复杂度翻倍。</div></div>
+      <div class="card no"><div class="ct">不做 UG 内部插件</div><div class="cd">理想状态是 UG 里点一下「上传」，但要写 NX Open 插件，得在你机器上装。三期再说。</div></div>
+      <div class="card no"><div class="ct">不做自定义审批流</div><div class="cd">固定「本部门主管一级审批」。要三级会签的公司，通常也用不起来。</div></div>
+      <div class="card no"><div class="ct">不做报价 / 开票 / 排产</div><div class="cd">只管图和交接，不管钱。交付签收完，接你们现有的流程。</div></div>
+      <div class="card no"><div class="ct">不做手机 App</div><div class="cd">网页自适应手机，够用了。装 App 只会多一个没人更新的东西。</div></div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">12</div>
+      <h2>怎么交付</h2>
+    </div>
+    <table>
+      <thead><tr><th style="width:72px">阶段</th><th style="width:30%">产出</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>一期</b><br><span style="font-size:11.5px;color:#94a3b8">本次</span></td>
+          <td>可运行的完整系统 + 部署说明</td>
+          <td>订单、七环节进度、交接单（提交/审批/签收/退回）、图档与版本、三套编号、三层 BOM（红黄绿灯 + 快照）、变更/改模单、客户确认、操作流水、六部门账号与权限。带一份走完整条线的演示数据。<br><b>先交付可直接运行的 Web 版</b>（<code>python run.py</code>），Docker 配置等流程定型后再加。</td>
+        </tr>
+        <tr>
+          <td><b>二期</b><br><span style="font-size:11.5px;color:#94a3b8">可选</span></td>
+          <td>效率增强</td>
+          <td>历史图档批量导入、企业微信/邮件提醒、交接单 PDF 打印、图档水印、扫码看单。</td>
+        </tr>
+        <tr>
+          <td><b>三期</b><br><span style="font-size:11.5px;color:#94a3b8">可选</span></td>
+          <td>跟 UG 打通</td>
+          <td>NX Open 插件：在 UG 里直接「另存为新版本并提交交接」，不用切浏览器。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 12 -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">13</div>
+      <h2>开工前，最后确认三件事</h2>
+    </div>
+    <table>
+      <thead><tr><th class="num-col">#</th><th style="width:32%">问题</th><th>我的判断（不同意就说）</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="num-col">1</td>
+          <td><b>七个环节对吗？</b><br>尤其工程部出现两次</td>
+          <td>04 开模准备（定号、BOM、开模图）和 06 工程图发布（给生产部的正式工程图）分开算。<br><span style="color:#64748b;font-size:12.5px">如果工程图其实在开模前就出了，两环合并成五环也行。</span></td>
+        </tr>
+        <tr>
+          <td class="num-col">2</td>
+          <td><b>审批人是谁？</b></td>
+          <td>默认<b>本部门主管</b>：设计主管审你的结构，工程主管审工程部的单。<br><span style="color:#64748b;font-size:12.5px">如果实际是老板一个人签所有，我改成单一审批人。</span></td>
+        </tr>
+        <tr>
+          <td class="num-col">3</td>
+          <td><b>BOM 三层够不够？</b></td>
+          <td>装配 → 零件 → 标准件/辅料，三层。工程部维护，红黄绿灯校验图档。<br><span style="color:#64748b;font-size:12.5px">不够就说要几层，我改成可配；默认按三层做。</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="h">这版结构我认为是对的，你回一句「按这个做」我就开始写代码</div>
+      <p>接下来交付的是<b>能跑的系统</b>，不是又一份文档。上面三条如果没意见，我就按默认值实现，不再回来问。</p>
+    </div>
+  </section>
+
+  <footer>
+    <span>Relay PDM 系统设计说明 v0.5</span>
+    <span>2026-11-13</span>
+  </footer>
+</div>
+</body>
+</html>

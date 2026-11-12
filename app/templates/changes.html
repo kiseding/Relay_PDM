@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}变更单{% endblock %}
+{% block head %}变更单{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="t">变更单</div>
+    <div class="d">业务员随口答应客户「改成这样看看」——先立一张单。没单子，不改图。</div>
+  </div>
+  <div class="sp"></div>
+  <button class="btn primary" onclick="document.getElementById('newchg').open=true">＋ 提变更</button>
+</div>
+
+<details class="card" id="newchg" style="margin-bottom:16px">
+  <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">＋ 提一张变更单</summary>
+  <form method="post" action="/changes/new" style="padding:14px 16px 16px;border-top:1px solid var(--line2)">
+    <div class="row">
+      <div><label class="fl">哪张订单 *</label>
+        <select name="order_id" required>
+          {% for o in orders_list %}<option value="{{ o.id }}">{{ o.code }} · {{ o.product_name }}</option>{% endfor %}
+        </select></div>
+      <div><label class="fl">谁提的</label>
+        <select name="kind">
+          <option value="customer">客户变更（业务提）</option>
+          <option value="mold">改模单（模具部提）</option>
+          <option value="eng">工程变更（工程部提）</option>
+        </select></div>
+      <div><label class="fl">从哪来的</label>
+        <select name="source"><option>微信</option><option>电话</option><option>邮件</option>
+          <option>会议</option><option>试模现场</option><option>客户图纸</option></select></div>
+    </div>
+    <div class="field" style="margin-top:10px"><label class="fl">改什么 *</label>
+      <input type="text" name="title" required placeholder="卡扣位置整体下移 3mm"></div>
+    <div class="field"><label class="fl">说清楚</label>
+      <textarea name="detail" placeholder="客户装配时发现上盖扣不紧，要求三个卡扣全部下移 3mm，其余不变。微信里发了截图。"></textarea></div>
+    <label class="checkline" style="margin-bottom:12px">
+      <input type="checkbox" name="customer_confirmed"> 客户已经确认要改（没确认就先把单挂着，别急着动图）
+    </label>
+    <button class="btn primary" type="submit">提交</button>
+  </form>
+</details>
+
+<div class="card">
+  <div class="bd tight">
+    <table>
+      <thead><tr>
+        <th style="width:80px">单号</th><th style="width:120px">订单</th><th>改什么</th>
+        <th style="width:86px">类别</th><th style="width:66px">来源</th>
+        <th style="width:80px">客户认过</th><th style="width:90px">状态</th>
+        <th style="width:170px">裁定</th>
+      </tr></thead>
+      <tbody>
+      {% for c in rows %}
+        <tr>
+          <td class="mono xs">{{ c.code }}</td>
+          <td class="xs"><span class="mono">{{ c.order_code }}</span><div class="dim">{{ c.product_name }}</div></td>
+          <td class="sm"><b>{{ c.title }}</b>
+            {% if c.detail %}<div class="xs dim">{{ c.detail }}</div>{% endif %}
+            <div class="xs dim" style="margin-top:2px">{{ c.created_by_name }} 提于 {{ c.created_at[:16] }}</div></td>
+          <td><span class="tag">{{ CHANGE_KIND.get(c.kind) }}</span></td>
+          <td class="xs dim">{{ c.source or '—' }}</td>
+          <td class="mid">{% if c.customer_confirmed %}<span class="tag" style="background:#faf5ff;color:#7e22ce;border-color:#e9d5ff">已确认</span>
+            {% else %}<span class="xs dim">没</span>{% endif %}</td>
+          <td><span class="pill p-{{ 'open' if c.status=='open' else ('accepted' if c.status in ('accepted','done') else 'rejected') }}">{{ CHANGE_STATUS.get(c.status) }}</span></td>
+          <td>
+            {% if can_decide and c.status == 'open' %}
+            <form method="post" action="/changes/{{ c.id }}/decide">
+              <input type="text" name="note" placeholder="裁定说明" style="font-size:12px;padding:5px 8px;margin-bottom:5px">
+              <input type="hidden" name="status" value="accepted">
+              <div style="display:flex;gap:5px">
+                <button class="btn sm primary" type="submit" style="flex:1">采纳</button>
+                <button class="btn sm danger" type="submit" onclick="this.form.status.value='rejected'" style="flex:1">不采纳</button>
+              </div>
+            </form>
+            {% elif c.decision_note %}
+              <div class="xs">{{ c.decision_note }}</div>
+              <div class="xs dim">{{ c.decided_by_name }} · {{ c.decided_at[:16] if c.decided_at else '' }}</div>
+            {% else %}<span class="xs dim">—</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      {% if not rows %}<tr><td colspan="8"><div class="empty"><div class="big">✎</div>没有变更单</div></td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

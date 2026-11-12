@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}{{ h.code }}{% endblock %}
+{% block head %}{{ h.code }} · {{ o.product_name }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="t">交接 {{ from_info.name }} → {{ to_info.name }}</div>
+    <div class="d"><a href="/orders/{{ o.id }}" class="mono">{{ o.code }}</a> · {{ o.product_name }}
+      · <a href="/orders/{{ o.id }}">看整单进度 ›</a></div>
+  </div>
+  <div class="sp"></div>
+  <span class="pill p-{{ h.status }}" style="font-size:12.5px;padding:4px 12px">{{ HO_STATUS.get(h.status) }}</span>
+</div>
+
+<div class="grid g21">
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="bd">
+        <div class="flexr" style="gap:10px;flex-wrap:wrap">
+          <span class="tag dept-{{ from_info.dept }}">{{ '%02d'|format(from_info.no) }} {{ from_info.name }}</span>
+          <span style="color:var(--faint)">→</span>
+          <span class="tag dept-{{ to_info.dept }}">{{ '%02d'|format(to_info.no) }} {{ to_info.name }}</span>
+          {% if h.round > 1 %}<span class="pill p-rejected">第 {{ h.round }} 轮</span>{% endif %}
+        </div>
+        <p class="sm" style="margin:12px 0 0;padding:10px 12px;background:var(--panel2);border-radius:8px;border-left:3px solid var(--teal)">
+          {{ h.note }}
+        </p>
+        <div class="hr"></div>
+        <div class="kv">
+          <span class="k">提交</span><span class="v">{{ h.submitter_name }}（{{ dept_name(h.submitter_dept) }}）· {{ h.submitted_at[:16] }}</span>
+          <span class="k">审批</span><span class="v">
+            {% if h.approver_name %}{{ h.approver_name }} · {{ h.approved_at[:16] if h.approved_at else '' }}
+              {% if h.approve_note %}<div class="xs dim">{{ h.approve_note }}</div>{% endif %}
+            {% elif h.status == 'rejected' %}<span style="color:var(--red)">被退回：{{ h.approve_note }}</span>
+            {% else %}<span class="dim">等主管点头</span>{% endif %}</span>
+          <span class="k">签收</span><span class="v">
+            {% if h.receiver_name %}{{ h.receiver_name }} · {{ h.received_at[:16] if h.received_at else '' }}
+              {% if h.receive_note %}<div class="xs dim">{{ h.receive_note }}</div>{% endif %}
+            {% else %}<span class="dim">等对方签收，签了才算交到</span>{% endif %}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="hd"><h3>这一单交的图（{{ items|length }}）</h3><div class="sp"></div>
+        <span class="hint">冻结的是提交那一刻的版本</span></div>
+      <div class="bd tight">
+        <table>
+          <thead><tr><th>图档</th><th style="width:140px">设计编号</th><th style="width:100px">开模编号</th>
+            <th style="width:60px">版本</th><th style="width:60px"></th></tr></thead>
+          <tbody>
+          {% for it in items %}
+            <tr>
+              <td><b>{{ it.doc_title }}</b><div class="xs dim">{{ it.doc_type }} · {{ it.file_name }}</div></td>
+              <td class="mono xs">{{ it.design_no }}</td>
+              <td class="mono xs">{{ it.mold_no or '—' }}</td>
+              <td class="mono sm" style="color:var(--teal);font-weight:700">v{{ it.version_no }}</td>
+              <td><a class="btn sm" href="/files/{{ it.stored_name }}">下载</a></td>
+            </tr>
+          {% endfor %}
+          {% if not items %}<tr><td colspan="5"><div class="empty xs">这张单没带图，只带了说明</div></td></tr>{% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if bom %}
+    <div class="card">
+      <div class="hd"><h3>BOM 快照（第 {{ bom_rev }} 版 · {{ bom|length }} 行）</h3><div class="sp"></div>
+        <span class="hint">只读。当时是什么样，永远是什么样</span></div>
+      <div class="bd tight">
+        <table class="bomtree">
+          <thead><tr><th class="no">#</th><th style="width:148px">零件号</th><th>名称</th>
+            <th style="width:60px">数量</th><th style="width:66px">来源</th><th style="width:132px">图档</th></tr></thead>
+          <tbody>
+          {% for r in bom %}
+            <tr class="{{ 'd1' if r.no|length == 1 else '' }}">
+              <td class="no">{{ r.no }}</td>
+              <td class="mono xs">{{ r.part_no }}</td>
+              <td style="padding-left:{{ 14 + r.no.count('.') * 22 }}px">
+                {{ r.part_name }}{% if r.spec %}<span class="xs dim"> · {{ r.spec }}</span>{% endif %}</td>
+              <td class="sm">{{ r.qty|round(0)|int }}{{ r.unit }}</td>
+              <td class="xs">{{ r.source }}</td>
+              <td class="xs"><span class="lamp {{ r.lamp }}"></span> {{ r.doc }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    {% if can_approve %}
+    <div class="card" style="margin-bottom:16px;border-color:var(--amberline)">
+      <div class="hd" style="background:var(--amberbg);border-radius:11px 11px 0 0"><h3 style="color:var(--amber)">等你审批</h3></div>
+      <div class="bd">
+        <p class="xs dim" style="margin-top:0">批了，单上的版本就转「已发布」，成为该图档的当前版本；旧的自动作废。</p>
+        <form method="post" action="/handovers/{{ h.id }}/approve" style="margin-bottom:10px">
+          <input type="text" name="note" placeholder="审批意见（可空）" style="margin-bottom:8px">
+          <button class="btn primary" style="width:100%" type="submit">通过</button>
+        </form>
+        <form method="post" action="/handovers/{{ h.id }}/reject">
+          <input type="text" name="note" placeholder="为什么退回（写清楚，免得来回三趟）" style="margin-bottom:8px">
+          <button class="btn danger" style="width:100%" type="submit">退回重做</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if can_accept %}
+    <div class="card" style="margin-bottom:16px;border-color:var(--blueline,#dbeafe)">
+      <div class="hd" style="background:var(--bluebg);border-radius:11px 11px 0 0"><h3 style="color:var(--blue)">等你签收</h3></div>
+      <div class="bd">
+        <p class="xs dim" style="margin-top:0">签了，这一单才算走到「{{ to_info.name }}」。之后别人问「你什么时候拿到的」，看这里。</p>
+        <form method="post" action="/handovers/{{ h.id }}/accept">
+          <input type="text" name="note" placeholder="签收备注（可空）" style="margin-bottom:8px">
+          <button class="btn primary" style="width:100%" type="submit">签收</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if h.status == 'pending' and not is_mgr %}
+    <div class="card" style="margin-bottom:16px"><div class="bd xs dim">
+      已经交给主管了。批完会自动通知{{ dept_name(to_info.dept) }}来签收，你不用催。</div></div>
+    {% endif %}
+
+    {% if h.status == 'rejected' %}
+    <div class="card" style="margin-bottom:16px;border-color:var(--redline)"><div class="bd">
+      <div style="color:var(--red);font-weight:600;font-size:13px">被退回了</div>
+      <div class="xs dim" style="margin-top:4px">{{ h.approve_note }}</div>
+      <div class="xs dim" style="margin-top:6px">图上还是草稿，改完回订单页重新提一张——上一轮的记录不会丢。</div>
+      <a class="btn sm" style="margin-top:8px" href="/orders/{{ o.id }}">回订单</a>
+    </div></div>
+    {% endif %}
+
+    <div class="card">
+      <div class="hd"><h3>这张单的规矩</h3></div>
+      <div class="bd xs" style="color:var(--muted);line-height:1.9">
+        ① 提交时勾的版本会被冻结，单子活着的时候不许改<br>
+        ② 主管批了才转「已发布」，之前都是草稿<br>
+        ③ 对方签收，订单才推进到下一环<br>
+        ④ 驳回不删记录，重提算第 {{ h.round + 1 }} 轮
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

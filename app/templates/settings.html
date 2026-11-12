@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}设置{% endblock %}
+{% block head %}设置{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="t">账号与系统</div>
+    <div class="d">人不多的话，这里加几个账号就够了。不用配权限矩阵。</div>
+  </div>
+</div>
+
+<div class="grid g21">
+  <div>
+    <div class="card">
+      <div class="hd"><h3>账号（{{ users|length }}）</h3><div class="sp"></div>
+        <span class="hint">部门决定他能推哪一环</span></div>
+      <div class="bd tight">
+        <table>
+          <thead><tr><th style="width:96px">账号</th><th style="width:90px">姓名</th><th style="width:130px">部门</th>
+            <th style="width:76px">角色</th><th style="width:70px">状态</th>{% if can_admin %}<th style="width:60px"></th>{% endif %}</tr></thead>
+          <tbody>
+          {% for u in users %}
+            <tr>
+              <td class="mono xs">{{ u.username }}</td>
+              <td class="sm">{{ u.name }}</td>
+              <td><span class="tag dept-{{ u.dept }}">{{ DEPTS.get(u.dept, u.dept) }}</span></td>
+              <td class="xs">{{ ROLE_NAMES.get(u.role, u.role) }}</td>
+              <td>{% if u.active %}<span class="pill p-published">在用</span>{% else %}<span class="pill p-obsolete">停用</span>{% endif %}</td>
+              {% if can_admin %}
+              <td>
+                {% if u.username != 'admin' %}
+                <form method="post" action="/settings/users/{{ u.id }}/toggle">
+                  <button class="btn sm ghost" type="submit">{{ '停用' if u.active else '启用' }}</button>
+                </form>
+                {% endif %}
+              </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if can_admin %}
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><h3>加人</h3></div>
+      <form method="post" action="/settings/users/new" class="bd">
+        <div class="row">
+          <div><label class="fl">账号（英文/拼音）</label><input type="text" name="username" required placeholder="wang"></div>
+          <div><label class="fl">姓名</label><input type="text" name="name" required placeholder="王工"></div>
+          <div><label class="fl">初始密码</label><input type="text" name="password" value="123456"></div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div><label class="fl">部门</label>
+            <select name="dept">{% for k, v in DEPTS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+          <div><label class="fl">角色</label>
+            <select name="role">
+              <option value="staff">员工（只能推自己那一环）</option>
+              <option value="manager">主管（能审批）</option>
+              <option value="admin">管理员（能改一切）</option>
+            </select></div>
+        </div>
+        <button class="btn primary" style="margin-top:12px" type="submit">加进去</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="hd"><h3>系统里现在有什么</h3></div>
+      <div class="bd">
+        <div class="kv">
+          <span class="k">订单</span><span class="v">{{ counts.orders }}</span>
+          <span class="k">图档</span><span class="v">{{ counts.documents }}</span>
+          <span class="k">版本</span><span class="v">{{ counts.doc_versions }}</span>
+          <span class="k">交接单</span><span class="v">{{ counts.handovers }}</span>
+          <span class="k">BOM 行</span><span class="v">{{ counts.bom_items }}</span>
+        </div>
+        <div class="hr"></div>
+        <div class="xs dim">
+          数据存在 <code>data/plm.db</code>，文件存在 <code>data/files/</code>。<br>
+          备份就是把这个目录拷走，换机器就是拷回去。
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="hd"><h3>七个环节</h3></div>
+      <div class="bd">
+        {% for s in STAGES %}
+        <div class="flexr" style="padding:4px 0">
+          <span class="mono xs dim" style="width:22px">{{ '%02d'|format(s.no) }}</span>
+          <span class="sm" style="flex:1">{{ s.name }}</span>
+          <span class="tag dept-{{ s.dept }}">{{ dept_name(s.dept) }}</span>
+        </div>
+        {% endfor %}
+        <div class="xs dim" style="margin-top:8px">这七个写在代码里，改要动 <code>app/db.py</code>。刻意不做图形化配置——配得越活，越没人说得清现在走的是哪条。</div>
+      </div>
+    </div>
+
+    {% if can_admin %}
+    <div class="card" style="border-color:var(--redline)">
+      <div class="hd" style="background:var(--redbg);border-radius:11px 11px 0 0"><h3 style="color:var(--red)">清空重来</h3></div>
+      <form method="post" action="/settings/reset" class="bd">
+        <div class="xs dim" style="margin-bottom:8px">清掉所有订单、图档、交接单、BOM，然后灌回那份演示数据。账号保留。</div>
+        <input type="text" name="confirm" placeholder="输 RESET 确认" style="margin-bottom:8px">
+        <button class="btn danger" type="submit">清空并重置演示数据</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

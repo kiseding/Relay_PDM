@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}BOM{% endblock %}
+{% block head %}BOM{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="t">零件清单（BOM）</div>
+    <div class="d">工程部维护，别人只读。每行自查：自制件有没有图、图发没发。</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="bd tight">
+    <table>
+      <thead><tr>
+        <th style="width:130px">订单</th><th>产品</th><th style="width:150px">现在在谁手上</th>
+        <th class="mid" style="width:70px">零件行</th><th class="mid" style="width:110px">对图情况</th>
+        <th style="width:90px">BOM 版本</th><th style="width:70px"></th>
+      </tr></thead>
+      <tbody>
+      {% for o in rows %}
+        <tr>
+          <td><span class="mono xs">{{ o.code }}</span></td>
+          <td><b>{{ o.product_name }}</b><div class="xs dim">{{ o.customer_name or '—' }}</div></td>
+          <td><span class="tag dept-{{ o.stage_info.dept }}">{{ '%02d'|format(o.stage_info.no) }} {{ o.stage_info.name }}</span></td>
+          <td class="mid sm">{{ o.n or '—' }}</td>
+          <td class="mid xs">
+            {% if o.n %}
+              {% if o.warn %}<span class="lamp warn"></span> {{ o.warn }}{% endif %}
+              {% if o.bad %}<span class="lamp bad"></span> {{ o.bad }}{% endif %}
+              {% if not o.warn and not o.bad %}<span class="lamp ok"></span> 齐{% endif %}
+            {% else %}<span class="dim">未建</span>{% endif %}
+          </td>
+          <td class="sm">{{ '第 %d 版'|format(o.bom_rev) if o.bom_rev else '—' }}</td>
+          <td><a class="btn sm" href="/bom/{{ o.id }}">打开</a></td>
+        </tr>
+      {% endfor %}
+      {% if not rows %}<tr><td colspan="7"><div class="empty"><div class="big">☰</div>还没有订单</div></td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

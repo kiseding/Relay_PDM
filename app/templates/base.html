@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Relay PDM{% endblock %} · Relay PDM</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand">
+      <div class="logo"><i>R</i>Relay<span style="font-size:11px;font-weight:600;color:#5eead4;margin-left:3px;letter-spacing:.06em">PDM</span></div>
+      <div class="sub">PDM · ONE DRAWING, ONE TRUTH</div>
+    </div>
+    <nav class="nav">
+      <a href="/" class="{{ 'on' if path=='/' }}"><span class="ic">◎</span>工作台</a>
+      {% if me.role in ('admin', 'manager') %}
+      <a href="/board" class="{{ 'on' if path.startswith('/board') }}"><span class="ic">▦</span>总看板</a>
+      {% endif %}
+      <a href="/orders" class="{{ 'on' if path.startswith('/orders') }}"><span class="ic">▤</span>订单</a>
+      <a href="/docs" class="{{ 'on' if path.startswith('/docs') }}"><span class="ic">◫</span>图档</a>
+      <a href="/handovers" class="{{ 'on' if path.startswith('/handovers') }}"><span class="ic">⇄</span>交接
+        {% if nav_counts.handover %}<span class="cnt">{{ nav_counts.handover }}</span>{% endif %}</a>
+      <a href="/bom" class="{{ 'on' if path.startswith('/bom') }}"><span class="ic">☰</span>BOM</a>
+      <a href="/changes" class="{{ 'on' if path.startswith('/changes') }}"><span class="ic">✎</span>变更单
+        {% if nav_counts.changes %}<span class="cnt">{{ nav_counts.changes }}</span>{% endif %}</a>
+      <div class="grp">记录</div>
+      <a href="/activity" class="{{ 'on' if path.startswith('/activity') }}"><span class="ic">≣</span>动态</a>
+      <a href="/settings" class="{{ 'on' if path.startswith('/settings') }}"><span class="ic">⚙</span>设置</a>
+    </nav>
+    <div class="who">
+      <b>{{ me.name }}</b>
+      {{ DEPTS.get(me.dept, me.dept) }} · {{ ROLE_NAMES.get(me.role, me.role) }}
+      <div><a href="/logout">退出登录</a></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="btn ghost sm" onclick="document.getElementById('side').classList.toggle('open')" style="display:none" id="mbtn">☰</button>
+      <h1>{% block head %}{% endblock %}</h1>
+      <div class="sp"></div>
+      <form class="searchbox" action="/search" method="get">
+        <span>⌕</span>
+        <input name="q" value="{{ q if q is defined else '' }}" placeholder="设计编号 / 开模编号 / 客户料号 / 单号">
+      </form>
+    </div>
+    <div class="wrap">
+      {% if ok %}<div class="toast ok"><span>✓</span><div>{{ ok }}</div><span class="x" onclick="this.parentNode.remove()">×</span></div>{% endif %}
+      {% if err %}<div class="toast err"><span>!</span><div>{{ err }}</div><span class="x" onclick="this.parentNode.remove()">×</span></div>{% endif %}
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+<script>
+document.getElementById('mbtn').style.display = window.innerWidth < 760 ? '' : 'none';
+</script>
+</body>
+</html>

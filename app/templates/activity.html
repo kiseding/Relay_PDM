@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}动态{% endblock %}
+{% block head %}动态{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="t">全公司操作流水</div>
+    <div class="d">谁在什么时候干了什么。图改了几版、谁批的、谁签的，全在这儿。</div>
+  </div>
+</div>
+
+<form method="get" action="/activity" class="flexr" style="margin-bottom:14px;gap:8px;flex-wrap:wrap">
+  <input type="text" name="q" value="{{ q }}" placeholder="搜内容，比如 UG-2601 或 卡扣" style="max-width:260px">
+  <select name="actor" style="max-width:150px">
+    <option value="">所有人</option>
+    {% for p in people %}<option {{ 'selected' if actor == p }}>{{ p }}</option>{% endfor %}
+  </select>
+  <button class="btn" type="submit">筛</button>
+  {% if q or actor %}<a class="btn ghost" href="/activity">清掉</a>{% endif %}
+</form>
+
+<div class="card">
+  <div class="bd">
+    <ul class="tl">
+      {% for r in rows %}
+      <li>
+        <span class="t">{{ r.created_at[5:16] }}</span>
+        <span style="flex:1;min-width:0">
+          <span class="a">{{ r.actor_name }}</span> <span class="d">{{ r.action }}</span>
+          <div class="xs dim">{{ r.detail }}</div>
+        </span>
+        {% if r.order_id %}<a class="xs" href="/orders/{{ r.order_id }}">看单 ›</a>{% endif %}
+      </li>
+      {% endfor %}
+      {% if not rows %}<div class="empty xs">没有记录</div>{% endif %}
+    </ul>
+  </div>
+</div>
+{% endblock %}

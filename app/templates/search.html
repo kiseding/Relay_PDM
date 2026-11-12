@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}搜索{% endblock %}
+{% block head %}搜索「{{ q }}」{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="t">{{ docs|length }} 张图档 · {{ ords|length }} 张订单</div>
+    <div class="d">设计编号、开模编号、客户料号、图档名、订单号，都在这一个框里搜。</div>
+  </div>
+</div>
+
+{% if docs %}
+<div class="card" style="margin-bottom:16px">
+  <div class="hd"><h3>图档</h3></div>
+  <div class="bd tight">
+    <table>
+      <thead><tr><th>图档</th><th style="width:150px">设计编号</th><th style="width:110px">开模编号</th>
+        <th style="width:130px">客户料号 / 别名</th><th style="width:100px">当前版本</th><th style="width:120px">订单</th></tr></thead>
+      <tbody>
+      {% for d in docs %}
+        <tr>
+          <td><a href="/docs/{{ d.id }}"><b>{{ d.title }}</b></a> <span class="tag">{{ d.doc_type }}</span></td>
+          <td class="mono" style="font-size:12px">{{ d.design_no }}</td>
+          <td class="mono" style="font-size:12px">{{ d.mold_no or '—' }}</td>
+          <td class="xs dim">{{ d.aliases or '—' }}</td>
+          <td>{% if d.ver %}<span class="mono" style="color:var(--teal);font-weight:700">v{{ d.ver.version_no }}</span>
+            <span class="pill p-{{ d.ver.status }}">{{ VER_STATUS.get(d.ver.status) }}</span>
+            {% else %}<span class="tag">无正式版</span>{% endif %}</td>
+          <td class="xs">{{ d.order_code or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if ords %}
+<div class="card">
+  <div class="hd"><h3>订单</h3></div>
+  <div class="bd tight">
+    <table>
+      <thead><tr><th style="width:130px">单号</th><th>产品</th><th style="width:160px">客户</th><th style="width:150px">环节</th></tr></thead>
+      <tbody>
+      {% for o in ords %}
+        <tr><td><a href="/orders/{{ o.id }}" class="mono xs">{{ o.code }}</a></td>
+          <td><b>{{ o.product_name }}</b></td><td class="sm">{{ o.customer_name or '—' }}</td>
+          <td><span class="tag dept-{{ stage(o.current_stage).dept }}">{{ stage(o.current_stage).name }}</span></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if not docs and not ords %}
+<div class="card"><div class="empty"><div class="big">⌕</div>
+  {% if q %}没搜到。「M-2601-A 是什么」这种问题，多半是编号没录进系统。{% else %}上面搜索框输点什么{% endif %}
+</div></div>
+{% endif %}
+{% endblock %}
