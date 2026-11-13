@@ -5,14 +5,14 @@
 
 <div class="page-head">
   <div>
-    <div class="t">订单分布</div>
+    <div class="t">需求分布</div>
     <div class="d">卡片右上角为当前环节停留天数，超 7 天黄色、超 14 天红色</div>
   </div>
   <div class="right"><a class="btn sm" href="/board">刷新</a></div>
 </div>
 
 <div class="grid kb-stats">
-  <a class="stat teal" href="/orders"><div class="k">进行中订单</div><div class="v">{{ stats.active }}</div></a>
+  <a class="stat teal" href="/orders"><div class="k">进行中需求</div><div class="v">{{ stats.active }}</div></a>
   <div class="stat {{ 'warn' if stats.stuck }}"><div class="k">滞留超 7 天</div><div class="v">{{ stats.stuck }}</div></div>
   <a class="stat {{ 'warn' if stats.pending }}" href="/handovers"><div class="k">待主管审批</div><div class="v">{{ stats.pending }}</div></a>
   <div class="stat {{ 'warn' if stats.unconfirmed }}"><div class="k">客户未确认</div><div class="v">{{ stats.unconfirmed }}</div></div>
@@ -34,13 +34,14 @@
       <a class="kb-card {{ c.level }}" href="/orders/{{ c.o.id }}">
         <div class="kb-top">
           <span class="kb-no">{{ c.o.code }}</span>
+          <span class="src src-{{ c.src.key }}">{{ c.src.short }}</span>
           <span class="kb-days {{ c.level }}">{{ c.days }}天</span>
         </div>
         <div class="kb-pn">{{ c.o.product_name }}</div>
         <div class="kb-cust">{{ c.o.customer_name or '未填写客户' }}</div>
         <div class="kb-fl {{ c.fcls }}">{{ c.flag }}</div>
         <div class="kb-meta">
-          <span title="本订单图档数">图档 {{ c.docs }}</span>
+          <span title="本需求图档数">图档 {{ c.docs }}</span>
           {% if c.warn %}<span class="kb-mi warn" title="BOM 已登记零件，但未关联图档">缺图 {{ c.warn }}</span>{% endif %}
           {% if c.bad %}<span class="kb-mi bad" title="已关联图档，但当前版本未发布">未发布 {{ c.bad }}</span>{% endif %}
           {% if c.gate %}<span class="kb-mi bad" title="本环节必交项未齐：{{ c.gate_names|join('、') }}">缺件 {{ c.gate }}</span>{% endif %}
@@ -72,7 +73,7 @@
         <span class="xs dim nowrap">{{ c.o.due_date[5:] if c.o.due_date else '' }}</span>
       </a>
       {% endfor %}
-      {% else %}<div class="empty xs">暂无进行中订单</div>{% endif %}
+      {% else %}<div class="empty xs">暂无进行中需求</div>{% endif %}
     </div>
   </div>
 

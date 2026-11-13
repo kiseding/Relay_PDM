@@ -19,7 +19,7 @@
   </summary>
   <form method="post" action="/rp/new" style="padding:14px 16px 16px;border-top:1px solid var(--line2)">
     <div class="row">
-      <div><label class="fl">所属订单 *</label>
+      <div><label class="fl">所属需求 *</label>
         <select name="order_id" id="rp-order" required onchange="filterVer()">
           {% for o in orders %}<option value="{{ o.id }}" data-color="{{ o.color_req or '' }}">{{ o.code }} · {{ o.product_name }}</option>{% endfor %}
         </select></div>
@@ -54,7 +54,7 @@
   <div class="bd tight">
     <table>
       <thead><tr>
-        <th style="width:96px">单号</th><th style="width:124px">订单</th>
+        <th style="width:96px">单号</th><th style="width:124px">需求</th>
         <th>打样要求</th><th style="width:158px">依据版本</th>
         <th style="width:88px">交期 / 交接</th><th style="width:84px">状态</th>
         <th style="width:104px">处理</th>
@@ -108,7 +108,7 @@ function filterVer() {
   sel.innerHTML = '';
   const list = VERS.filter(v => String(v.order_id) === String(oid));
   if (!list.length) {
-    sel.innerHTML = '<option value="">该订单还没有图档版本</option>';
+    sel.innerHTML = '<option value="">该需求还没有图档版本</option>';
     return;
   }
   for (const v of list) {

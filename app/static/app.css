@@ -281,7 +281,8 @@ details[open] summary{margin-bottom:10px}
 .kb-card.bad{border-left-color:#ef4444; background:#fffbfb}
 .kb-card:hover{text-decoration:none; border-color:var(--tealline);
   box-shadow:0 6px 16px -10px rgba(15,118,110,.55)}
-.kb-top{display:flex; align-items:center; justify-content:space-between; gap:5px}
+.kb-top{display:flex; align-items:center; gap:5px}
+.kb-top .kb-days{margin-left:auto}
 .kb-no{font-family:"SF Mono",Consolas,"Courier New",monospace; font-size:10.5px; color:var(--faint); letter-spacing:-.03em}
 .kb-days{font-size:10.5px; font-weight:700; padding:1px 6px; border-radius:4px;
   background:#f1f5f9; color:#64748b; white-space:nowrap; flex:0 0 auto}
@@ -345,3 +346,23 @@ dl.kv dt{color:var(--faint); font-size:12px}
 dl.kv dd{margin:0; color:var(--ink2); line-height:1.5}
 .p-making{background:var(--bluebg); color:var(--blue); border-color:#dbeafe}
 .p-cancel{background:#f8fafc; color:var(--faint); border-color:var(--line)}
+
+/* ---------------- 需求来源：自主 / 客案 ---------------- */
+.src{display:inline-block; font-size:11px; font-weight:650; line-height:1.6; padding:1px 7px;
+     border-radius:5px; border:1px solid var(--line); background:#f8fafc; color:var(--muted);
+     white-space:nowrap; flex:0 0 auto}
+.src-own{background:var(--tealbg); color:var(--teal); border-color:var(--tealline)}
+.src-client{background:var(--violetbg); color:var(--violet); border-color:#e9d5ff}
+
+label.pick{display:flex; align-items:flex-start; gap:8px; padding:9px 12px; border:1px solid var(--line);
+           border-radius:8px; cursor:pointer; flex:1; min-width:200px; transition:border-color .12s, background .12s}
+label.pick:hover{border-color:var(--tealline); background:var(--panel2)}
+label.pick input{margin-top:3px; flex:0 0 auto}
+label.pick .pick-b{display:flex; flex-direction:column; gap:1px; line-height:1.45}
+label.pick:has(input:checked){border-color:var(--teal); background:var(--tealbg); box-shadow:inset 0 0 0 1px var(--teal)}
+form select{width:100%; padding:7px 10px; border:1px solid var(--line); border-radius:7px;
+            background:var(--panel); color:var(--ink); font-size:13px; font-family:inherit}
+form select.sel-src{width:auto; padding:6px 24px 6px 10px; font-size:12.5px; color:var(--ink2);
+        border-color:var(--line); background:var(--panel); cursor:pointer}
+form select.sel-src:hover{border-color:var(--tealline); color:var(--teal)}
+.kb-top .kb-no{min-width:0; overflow:hidden; text-overflow:ellipsis}

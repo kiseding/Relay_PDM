@@ -38,15 +38,28 @@ STAGES = [
 ]
 STAGE_BY_NO = {s["no"]: s for s in STAGES}
 
+# 需求来源：自主开发 / 客户来案
+ORDER_SOURCES = {
+    "own":     {"key": "own",     "name": "自主",  "short": "自主",
+                "desc": "我司自主立项开发，外观与结构由我司主导"},
+    "client":  {"key": "client",  "name": "客案",  "short": "客案",
+                "desc": "客户来图 / 来样，依客户既定方案转换落地"},
+}
+SOURCE_BY_KEY = ORDER_SOURCES
+DEFAULT_SOURCE = "own"
+
 # 每环节转出前必须具备的条件（齐套清单）。
 # 依据：微信群反馈的返工点——做色要求没拿到就发 RP、图没更新就通知开模、
 # 没有装配图就报价、采购单没下却按口头交期排产。
+# only = 仅该来源需满足；skip = 该来源不需满足
 STAGE_GATES = {
     1: [
         {"k": "req",     "label": "客户需求说明",       "kind": "field", "field": "requirements",
          "why": "不落字就全靠口头"},
         {"k": "color",   "label": "做色 / 表面处理要求", "kind": "field", "field": "color_req",
          "why": "缺了 RP 打回来颜色不对"},
+        {"k": "custok",  "label": "客案原始资料已收",   "kind": "flag",  "field": "client_ref_done",
+         "only": "client", "why": "来图来样要留档，否则后面各说各的"},
         {"k": "due",     "label": "客户交期",           "kind": "field", "field": "due_date",
          "why": "没交期说不清谁延误"},
     ],
@@ -54,7 +67,7 @@ STAGE_GATES = {
         {"k": "concept", "label": "外观效果图",         "kind": "doc",   "dtype": "外观效果图",
          "why": "结论要落在图档上"},
         {"k": "custok",  "label": "客户确认外观",       "kind": "field", "field": "customer_ok_at",
-         "why": "口头点头不算，要渠道与日期"},
+         "skip": "client", "why": "口头点头不算，要渠道与日期"},
     ],
     3: [
         {"k": "3d",      "label": "结构 3D 图",         "kind": "doc",   "dtype": "3D图",
@@ -87,10 +100,26 @@ STAGE_GATES = {
     7: [],
 }
 
+
+def order_source(key: str | None) -> dict:
+    return ORDER_SOURCES.get(key or DEFAULT_SOURCE, ORDER_SOURCES[DEFAULT_SOURCE])
+
+
+def _gate_applies(g: dict, src: str) -> bool:
+    if g.get("only") and g["only"] != src:
+        return False
+    if g.get("skip") and g["skip"] == src:
+        return False
+    return True
+
+
 # 未走完的环节里，哪些条件还没满足
 def gate_check(conn, order: dict, stage_no: int) -> list[dict]:
+    src = order.get("source") or DEFAULT_SOURCE
     out = []
     for g in STAGE_GATES.get(int(stage_no), []):
+        if not _gate_applies(g, src):
+            continue
         ok, detail = False, ""
         if g["kind"] == "field":
             ok = bool((order.get(g["field"]) or "").strip())
@@ -204,6 +233,7 @@ CREATE TABLE IF NOT EXISTS customers (
 CREATE TABLE IF NOT EXISTS orders (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     code          TEXT UNIQUE NOT NULL,
+    source        TEXT NOT NULL DEFAULT 'own',
     customer_name TEXT,
     product_name  TEXT NOT NULL,
     sales_name    TEXT,
@@ -217,6 +247,7 @@ CREATE TABLE IF NOT EXISTS orders (
     customer_part_no TEXT,
     customer_ok_at   TEXT,
     customer_ok_note TEXT,
+    client_ref_done  INTEGER NOT NULL DEFAULT 0,
     mold_no_done  INTEGER NOT NULL DEFAULT 0,
     po_no         TEXT,
     po_date       TEXT,
@@ -401,8 +432,10 @@ def connect() -> sqlite3.Connection:
 
 # 旧库升级：只补列，不动数据
 NEW_ORDER_COLS = [
+    ("source", "TEXT NOT NULL DEFAULT 'own'"),
     ("color_req", "TEXT"), ("customer_part_no", "TEXT"),
     ("customer_ok_at", "TEXT"), ("customer_ok_note", "TEXT"),
+    ("client_ref_done", "INTEGER NOT NULL DEFAULT 0"),
     ("mold_no_done", "INTEGER NOT NULL DEFAULT 0"),
     ("po_no", "TEXT"), ("po_date", "TEXT"),
     ("t0_done", "INTEGER NOT NULL DEFAULT 0"),
@@ -471,12 +504,12 @@ def seed_demo(conn: sqlite3.Connection) -> None:
                        ("宁波优家电器", "刘工 137****8890", "新客户，先打样")]:
         conn.execute("INSERT INTO customers(name,contact,note,created_at) VALUES(?,?,?,?)", (n, c, note, ts))
 
-    def add_order(code, cust, prod, req, due, stage_no, note=""):
+    def add_order(code, cust, prod, req, due, stage_no, note="", src=DEFAULT_SOURCE):
         return conn.execute(
-            """INSERT INTO orders(code,customer_name,product_name,sales_name,requirements,due_date,
+            """INSERT INTO orders(code,source,customer_name,product_name,sales_name,requirements,due_date,
                                   current_stage,status,bom_rev,note,created_by,created_at,updated_at)
-               VALUES(?,?,?,?,?,?,?,'active',0,?,3,?,?)""",
-            (code, cust, prod, "李强", req, due, stage_no, note, day, ts),
+               VALUES(?,?,?,?,?,?,?,?,'active',0,?,3,?,?)""",
+            (code, src, cust, prod, "李强", req, due, stage_no, note, day, ts),
         ).lastrowid
 
     def add_doc(oid, dno, mold, title, dtype, aliases, note=""):
@@ -529,7 +562,7 @@ def seed_demo(conn: sqlite3.Connection) -> None:
             )
         return hid
 
-    # ============ 订单 1：走到第 4 环（工程部手上）
+    # ============ 需求 1：走到第 4 环（工程部手上）
     o1 = add_order("DD-2026-0113", "宏昌实业", "电饭煲上盖注塑模",
                    "外观件，A 面高光，卡扣结构要能一次脱模；材质 ABS+PC。客户提供 3D 与 2D 各一份。",
                    "2026-12-20", 4, "客户交期较紧，先出上盖本体，装饰圈后续补充。")
@@ -608,19 +641,22 @@ def seed_demo(conn: sqlite3.Connection) -> None:
          None, None, None, None, 2, "李强", ts),
     )
 
-    # ============ 订单 2：刚接单
+    # ============ 需求 2：刚接单（客案：客户来图）
     o2 = add_order("DD-2026-0125", "宁波优家电器", "加湿器底座",
-                   "小批量试产，结构简单，主要确认装配孔位。", "2026-12-05", 1)
+                   "客户已提供完整 3D 与 2D，我司只做转换与结构落地，小批量试产。",
+                   "2026-12-05", 1, src="client")
+    conn.execute("UPDATE orders SET client_ref_done=1 WHERE id=?", (o2,))
 
-    # ============ 订单 3：结构手上（你有活干）
+    # ============ 需求 3：结构手上（你有活干，自主开发）
     o3 = add_order("DD-2026-0131", "宏昌实业", "咖啡机外壳",
-                   "双色外壳，A 面要咬花；内部需走线空间，客户希望减重 10%。", "2027-01-15", 3)
+                   "双色外壳，A 面要咬花；内部需走线空间，客户希望减重 10%。", "2027-01-15", 3,
+                   src="own")
     d4 = add_doc(o3, "UG-2601-0131-01", None, "外壳主体", "3D图", "咖啡机主壳")
     v5 = add_ver(d4, 1, "外壳主体_v1.prt", "首版结构，待客户确认外观纹路。", "draft")
     add_handover(o3, 1, 2, "accepted", "需求已明确，转外观设计。", day)
     add_handover(o3, 2, 3, "accepted", "外观方案已定稿（咬花 PT-1102），转结构设计。", ts)
 
-    # ============ 订单 4 / 5：给总看板看「卡住」和「快完」两种状态
+    # ============ 需求 4 / 5：给总看板看「卡住」和「快完」两种状态
     def ago(n: int) -> str:
         return (datetime.now(TZ8) - timedelta(days=n)).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -666,7 +702,7 @@ def seed_demo(conn: sqlite3.Connection) -> None:
         ("A 面拉丝不锈钢，内衬 PP 本色", "2026-10-20 09:15",
          "PO-2026-1102", "2026-09-18", o5))
 
-    # 第 5 环的订单补开模信息表与装配图（否则演示数据自身过不了第 4 环门槛）
+    # 第 5 环的需求补开模信息表与装配图（否则演示数据自身过不了第 4 环门槛）
     for dtype, title, fname in [("开模信息", "底座开模信息表", "MC-7712 开模信息.xlsx"),
                                 ("装配图", "底座装配图", "底座装配图.dwg")]:
         d = add_doc(o4, f"UG-2601-0108-{'09' if dtype == '开模信息' else '10'}", "M-2512-C",
@@ -691,12 +727,12 @@ def seed_demo(conn: sqlite3.Connection) -> None:
          1, "2026-10-25", "唐志杰", "done", "已交业务寄客户。", 2, "李强", day,
          "2026-10-23 17:40", "陈文建"))
 
-    for act, detail, oid in [        ("创建订单", "DD-2026-0113 电饭煲上盖注塑模", o1),
+    for act, detail, oid in [        ("创建需求", "DD-2026-0113 电饭煲上盖注塑模", o1),
         ("上传版本", "UG-2601-0113-01 上盖本体 v1", o1),
         ("审批通过", "交接 01→02 外观设计 → 结构设计", o1),
         ("上传版本", "UG-2601-0113-01 上盖本体 v2", o1),
         ("提交交接", "交接 04→05 开模准备 → 开模", o1),
-        ("创建订单", "DD-2026-0131 咖啡机外壳", o3),
+        ("创建需求", "DD-2026-0131 咖啡机外壳", o3),
     ]:
         conn.execute(
             "INSERT INTO audit_logs(actor_id,actor_name,action,target_type,target_id,order_id,detail,created_at)"

@@ -1,15 +1,25 @@
 {% extends "base.html" %}
 {% block title %}{{ o.code }}{% endblock %}
-{% block head %}订单 · {{ o.code }}{% endblock %}
+{% block head %}需求 · {{ o.code }}{% endblock %}
 {% block content %}
 
 <div class="page-head">
   <div>
-    <div class="t">{{ o.product_name }}</div>
+    <div class="t">{{ o.product_name }}
+      <span class="src src-{{ src_info.key }}" style="vertical-align:3px">{{ src_info.name }}</span></div>
     <div class="d">{{ o.customer_name or '未填写客户' }} · 业务 {{ o.sales_name or '—' }} · 交期 {{ o.due_date or '未定' }}
       {% if o.status == 'closed' %}<span class="tag" style="margin-left:6px">已结案</span>{% endif %}</div>
   </div>
   <div class="sp"></div>
+  {% if me.role in ('manager','admin') and o.status == 'active' %}
+  <form method="post" action="/orders/{{ o.id }}/source" class="flexr" style="gap:6px;align-items:center">
+    <select name="source" class="sel-src" onchange="this.form.submit()" title="修改需求来源">
+      {% for k, v in SOURCES.items() %}
+      <option value="{{ k }}" {{ 'selected' if src_info.key == k else '' }}>{{ v.name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
   <a class="btn" href="/bom/{{ o.id }}">BOM（{{ bom|length }} 行）</a>
   {% if can_submit %}
   <button class="btn primary" onclick="document.getElementById('submitbox').open=true">提交交接单</button>
@@ -67,7 +77,7 @@
       </tbody>
     </table>
     {% if gate_miss %}
-    {% set fillable = gate_miss | selectattr('k', 'in', ['color','custok','po','podate','moldno','t0']) | list %}
+    {% set fillable = gate_miss | selectattr('k', 'in', ['color','custok','clientref','po','podate','moldno','t0']) | list %}
     {% if fillable %}
     <form method="post" action="/orders/{{ o.id }}/fill" class="gatefill" style="padding:0 16px 14px">
       <div class="xs dim" style="margin:11px 0 8px">图档类缺口请先到<a href="/docs">图档</a>页创建</div>
@@ -99,6 +109,8 @@
           </div>
           {% elif g.k == 'moldno' %}
           <label class="checkline"><input type="checkbox" name="mold_no_done" checked> 开模编号已编入各图档</label>
+          {% elif g.k == 'clientref' %}
+          <label class="checkline"><input type="checkbox" name="client_ref_done"> 客户原始 3D / 2D / 样板已收齐留档</label>
           {% elif g.k == 't0' %}
           <label class="checkline"><input type="checkbox" name="t0_done"> T0 试模已完成并确认</label>
           {% endif %}
@@ -149,7 +161,7 @@
         {% endif %}
       {% endfor %}
     {% else %}
-      <div class="xs dim" style="margin-bottom:8px">本订单暂无图档，请先前往<a href="/docs">图档</a>页创建。</div>
+      <div class="xs dim" style="margin-bottom:8px">本需求暂无图档，请先前往<a href="/docs">图档</a>页创建。</div>
     {% endif %}
 
     {% if bom %}

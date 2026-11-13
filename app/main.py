@@ -336,6 +336,7 @@ def board(request: Request):
             items = bom_view(conn, o["id"])
             cards.append({
                 "o": o, "st": st, "days": days,
+                "src": db.order_source(o.get("source")),
                 "level": "bad" if days >= 14 else ("warn" if days >= 7 else "ok"),
                 "arrived": arrived.strftime("%m-%d") if arrived else "—",
                 "flag": flag, "fcls": fcls,
@@ -386,34 +387,48 @@ def board(request: Request):
         conn.close()
 
 
-# ---------------------------------------------------------------- 订单
+# ---------------------------------------------------------------- 需求（业务需求）
 
 @app.get("/orders", response_class=HTMLResponse)
-def orders_page(request: Request, s: int | None = None):
+def orders_page(request: Request, s: int | None = None, src: str | None = None):
     conn = db.connect()
     try:
-        sql = "SELECT * FROM orders"
-        args = []
+        where, args = [], []
         if s:
-            sql += " WHERE current_stage=?"
+            where.append("current_stage=?")
             args.append(s)
+        if src in db.ORDER_SOURCES:
+            where.append("COALESCE(source,?) = ?")
+            args.extend([db.DEFAULT_SOURCE, src])
+        sql = "SELECT * FROM orders"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, updated_at DESC"
         rows = []
         for r in conn.execute(sql, args).fetchall():
             d = dict(r)
             d["stage_info"] = db.stage(r["current_stage"])
+            d["src_info"] = db.order_source(r["source"])
             d["doc_count"] = conn.execute("SELECT COUNT(*) c FROM documents WHERE order_id=?", (r["id"],)).fetchone()["c"]
             d["bom_count"] = conn.execute("SELECT COUNT(*) c FROM bom_items WHERE order_id=?", (r["id"],)).fetchone()["c"]
             rows.append(d)
-        return render(request, "orders.html", rows=rows, cur_s=s)
+        counts = {}
+        for k in db.ORDER_SOURCES:
+            counts[k] = conn.execute(
+                "SELECT COUNT(*) c FROM orders WHERE COALESCE(source,?)=?", (db.DEFAULT_SOURCE, k)).fetchone()["c"]
+        return render(request, "orders.html", rows=rows, cur_s=s, cur_src=src,
+                      SOURCES=db.ORDER_SOURCES, counts=counts, DEFAULT_SOURCE=db.DEFAULT_SOURCE)
     finally:
         conn.close()
 
 
 @app.post("/orders/new")
 def order_new(request: Request, customer_name: str = Form(""), product_name: str = Form(...),
-              requirements: str = Form(""), due_date: str = Form(""), note: str = Form("")):
+              source: str = Form(db.DEFAULT_SOURCE), requirements: str = Form(""),
+              due_date: str = Form(""), color_req: str = Form(""), note: str = Form("")):
     me = current_user(request)
+    if source not in db.ORDER_SOURCES:
+        source = db.DEFAULT_SOURCE
     conn = db.connect()
     try:
         ts = db.now_str()
@@ -423,16 +438,18 @@ def order_new(request: Request, customer_name: str = Form(""), product_name: str
             n += 1
             code = f"DD-{ts[:4]}-{n:04d}"
         oid = conn.execute(
-            """INSERT INTO orders(code,customer_name,product_name,sales_name,requirements,due_date,
-                                  current_stage,status,bom_rev,note,created_by,created_at,updated_at)
-               VALUES(?,?,?,?,?,?,1,'active',0,?,?,?,?)""",
-            (code, customer_name, product_name, me["name"], requirements, due_date, note, me["id"], ts, ts),
+            """INSERT INTO orders(code,source,customer_name,product_name,sales_name,requirements,due_date,
+                                  color_req,current_stage,status,bom_rev,note,created_by,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,1,'active',0,?,?,?,?)""",
+            (code, source, customer_name, product_name, me["name"], requirements, due_date,
+             color_req, note, me["id"], ts, ts),
         ).lastrowid
         if customer_name:
             conn.execute("INSERT OR IGNORE INTO customers(name,created_at) VALUES(?,?)", (customer_name, ts))
-        log(conn, me, "创建订单", "order", oid, oid, f"{code} {product_name}")
+        log(conn, me, "创建需求", "order", oid, oid,
+            f"{code} {product_name}（{db.order_source(source)['name']}）")
         conn.commit()
-        return go(f"/orders/{oid}", ok="订单已创建")
+        return go(f"/orders/{oid}", ok="需求已创建")
     finally:
         conn.close()
 
@@ -444,7 +461,7 @@ def order_detail(request: Request, oid: int):
     try:
         o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
         if not o:
-            return go("/orders", err="未找到该订单")
+            return go("/orders", err="未找到该需求")
         o = dict(o)
         docs = []
         for r in conn.execute("SELECT * FROM documents WHERE order_id=? ORDER BY id", (oid,)).fetchall():
@@ -496,7 +513,8 @@ def order_detail(request: Request, oid: int):
             not any(h["status"] in ("pending", "approved") for h in handovers)
         return render(request, "order_detail.html", o=o, docs=docs, handovers=handovers,
                       changes=changes, bom=bom, logs=logs, cur=cur, can_submit=can_submit,
-                      steps=steps, lamps=lamps, gate=gate, gate_miss=gate_miss, rps=rps)
+                      steps=steps, lamps=lamps, gate=gate, gate_miss=gate_miss, rps=rps,
+                      src_info=db.order_source(o.get("source")), SOURCES=db.ORDER_SOURCES)
     finally:
         conn.close()
 
@@ -506,14 +524,15 @@ def order_fill(request: Request, oid: int,
                color_req: str = Form(""), customer_part_no: str = Form(""),
                customer_ok_at: str = Form(""), customer_ok_note: str = Form(""),
                po_no: str = Form(""), po_date: str = Form(""),
-               mold_no_done: str = Form(""), t0_done: str = Form("")):
+               mold_no_done: str = Form(""), t0_done: str = Form(""),
+               client_ref_done: str = Form("")):
     """补录齐套清单里缺的项。空的输入不覆盖已有值。"""
     me = current_user(request)
     conn = db.connect()
     try:
         o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
         if not o:
-            return go("/orders", err="未找到该订单")
+            return go("/orders", err="未找到该需求")
         sets, args, touched = [], [], []
         for k, v in [("color_req", color_req), ("customer_part_no", customer_part_no),
                      ("customer_ok_at", customer_ok_at), ("customer_ok_note", customer_ok_note),
@@ -522,7 +541,8 @@ def order_fill(request: Request, oid: int,
                 sets.append(f"{k}=?")
                 args.append(v.strip())
                 touched.append(k)
-        for k, v in [("mold_no_done", mold_no_done), ("t0_done", t0_done)]:
+        for k, v in [("mold_no_done", mold_no_done), ("t0_done", t0_done),
+                     ("client_ref_done", client_ref_done)]:
             if v == "on":
                 sets.append(f"{k}=1")
                 touched.append(k)
@@ -538,15 +558,35 @@ def order_fill(request: Request, oid: int,
         conn.close()
 
 
+@app.post("/orders/{oid}/source")
+def order_source_set(request: Request, oid: int, source: str = Form(...)):
+    me = current_user(request)
+    if source not in db.ORDER_SOURCES:
+        return go(f"/orders/{oid}", err="来源不合法")
+    conn = db.connect()
+    try:
+        o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
+        if not o:
+            return go("/orders", err="未找到该需求")
+        conn.execute("UPDATE orders SET source=?, updated_at=? WHERE id=?",
+                     (source, db.now_str(), oid))
+        log(conn, me, "改来源", "order", oid, oid,
+            f"{db.order_source(o['source'])['name']} → {db.order_source(source)['name']}")
+        conn.commit()
+        return go(f"/orders/{oid}", ok="来源已更新")
+    finally:
+        conn.close()
+
+
 @app.post("/orders/{oid}/close")
 def order_close(request: Request, oid: int):
     me = current_user(request)
     conn = db.connect()
     try:
         conn.execute("UPDATE orders SET status='closed', updated_at=? WHERE id=?", (db.now_str(), oid))
-        log(conn, me, "结案", "order", oid, oid, "订单结案")
+        log(conn, me, "结案", "order", oid, oid, "需求结案")
         conn.commit()
-        return go(f"/orders/{oid}", ok="订单已结案")
+        return go(f"/orders/{oid}", ok="需求已结案")
     finally:
         conn.close()
 
@@ -755,13 +795,13 @@ async def handover_new(request: Request):
     try:
         o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
         if not o:
-            return go("/orders", err="未找到该订单")
+            return go("/orders", err="未找到该需求")
         cur = db.stage(o["current_stage"])
         if cur["dept"] != me["dept"] and me["role"] not in ("manager", "admin"):
             return go(f"/orders/{oid}", err=f"第 {cur['no']} 环由{db.dept_name(cur['dept'])}负责")
         if conn.execute("SELECT 1 FROM handovers WHERE order_id=? AND status IN ('pending','approved')",
                         (oid,)).fetchone():
-            return go(f"/orders/{oid}", err="该订单已有进行中的交接单，请处理完成后再提交")
+            return go(f"/orders/{oid}", err="该需求已有进行中的交接单，请处理完成后再提交")
         if not note:
             return go(f"/orders/{oid}", err="请填写本环节完成情况说明")
         # 齐套校验：缺任何一项都不允许转出，避免把缺口推给下游
@@ -899,7 +939,7 @@ def handover_accept(request: Request, hid: int, note: str = Form("")):
         log(conn, me, "签收交接", "handover", hid, h["order_id"],
             f"第 {h['to_stage']} 环 {to_info['name']} 开始")
         conn.commit()
-        return go(f"/orders/{h['order_id']}", ok=f"已签收，订单进入第 {h['to_stage']} 环节")
+        return go(f"/orders/{h['order_id']}", ok=f"已签收，需求进入第 {h['to_stage']} 环节")
     finally:
         conn.close()
 
@@ -949,7 +989,7 @@ def rp_new(request: Request, order_id: int = Form(...), version_id: int = Form(0
     try:
         o = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
         if not o:
-            return go("/rp", err="未找到该订单")
+            return go("/rp", err="未找到该需求")
         if not purpose.strip():
             return go("/rp", err="请写明这次打样要确认什么")
         if not color_req.strip():
@@ -1037,7 +1077,7 @@ def bom_page(request: Request, oid: int):
     try:
         o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
         if not o:
-            return go("/orders", err="找不到订单")
+            return go("/orders", err="找不到需求")
         o = dict(o)
         rows = bom_view(conn, oid)
         docs = [dict(r) for r in conn.execute(

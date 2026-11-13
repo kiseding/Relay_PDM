@@ -13,7 +13,7 @@
   <div class="bd tight">
     <table>
       <thead><tr>
-        <th style="width:130px">订单</th><th>产品</th><th style="width:150px">当前环节</th>
+        <th style="width:130px">需求</th><th>产品</th><th style="width:150px">当前环节</th>
         <th class="mid" style="width:70px">零件行</th><th class="mid" style="width:110px">图档校验</th>
         <th style="width:90px">BOM 版本</th><th style="width:70px"></th>
       </tr></thead>
@@ -35,7 +35,7 @@
           <td><a class="btn sm" href="/bom/{{ o.id }}">查看</a></td>
         </tr>
       {% endfor %}
-      {% if not rows %}<tr><td colspan="7"><div class="empty"><div class="big">☰</div>暂无订单</div></td></tr>{% endif %}
+      {% if not rows %}<tr><td colspan="7"><div class="empty"><div class="big">☰</div>暂无需求</div></td></tr>{% endif %}
       </tbody>
     </table>
   </div>

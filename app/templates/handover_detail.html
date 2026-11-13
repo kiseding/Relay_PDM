@@ -7,7 +7,7 @@
   <div>
     <div class="t">交接 {{ from_info.name }} → {{ to_info.name }}</div>
     <div class="d"><a href="/orders/{{ o.id }}" class="mono">{{ o.code }}</a> · {{ o.product_name }}
-      · <a href="/orders/{{ o.id }}">查看订单进度 ›</a></div>
+      · <a href="/orders/{{ o.id }}">查看需求进度 ›</a></div>
   </div>
   <div class="sp"></div>
   <span class="pill p-{{ h.status }}" style="font-size:12.5px;padding:4px 12px">{{ HO_STATUS.get(h.status) }}</span>
@@ -128,8 +128,8 @@
     <div class="card" style="margin-bottom:16px;border-color:var(--redline)"><div class="bd">
       <div style="color:var(--red);font-weight:600;font-size:13px">已退回</div>
       <div class="xs dim" style="margin-top:4px">{{ h.approve_note }}</div>
-      <div class="xs dim" style="margin-top:6px">图档仍为草稿，修改后在订单页重新提交。</div>
-      <a class="btn sm" style="margin-top:8px" href="/orders/{{ o.id }}">返回订单</a>
+      <div class="xs dim" style="margin-top:6px">图档仍为草稿，修改后在需求页重新提交。</div>
+      <a class="btn sm" style="margin-top:8px" href="/orders/{{ o.id }}">返回需求</a>
     </div></div>
     {% endif %}
 
@@ -138,7 +138,7 @@
       <div class="bd xs" style="color:var(--muted);line-height:1.9">
         ① 提交时勾选的版本即被冻结，有效期内不可修改<br>
         ② 主管审批后转为「已发布」，此前均为草稿<br>
-        ③ 下一环节签收后，订单进入下一环节<br>
+        ③ 下一环节签收后，需求进入下一环节<br>
         ④ 驳回不删除记录，重新提交计入第 {{ h.round + 1 }} 轮
       </div>
     </div>

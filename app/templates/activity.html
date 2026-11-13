@@ -29,7 +29,7 @@
           <span class="a">{{ r.actor_name }}</span> <span class="d">{{ r.action }}</span>
           <div class="xs dim">{{ r.detail }}</div>
         </span>
-        {% if r.order_id %}<a class="xs" href="/orders/{{ r.order_id }}">查看订单 ›</a>{% endif %}
+        {% if r.order_id %}<a class="xs" href="/orders/{{ r.order_id }}">查看需求 ›</a>{% endif %}
       </li>
       {% endfor %}
       {% if not rows %}<div class="empty xs">暂无记录</div>{% endif %}

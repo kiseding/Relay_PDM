@@ -1,36 +1,61 @@
 {% extends "base.html" %}
-{% block title %}订单{% endblock %}
-{% block head %}订单{% endblock %}
+{% block title %}需求{% endblock %}
+{% block head %}需求{% endblock %}
 {% block content %}
 
 <div class="page-head">
   <div>
-    <div class="t">订单</div>
+    <div class="t">需求</div>
   </div>
   <div class="sp"></div>
-  <button class="btn primary" onclick="document.getElementById('neworder').open=true">＋ 新建订单</button>
+  <button class="btn primary" onclick="document.getElementById('neworder').open=true">＋ 新建需求</button>
 </div>
 
 <details class="card" id="neworder" style="margin-bottom:16px">
-  <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">＋ 新建订单</summary>
+  <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">＋ 新建需求</summary>
   <form method="post" action="/orders/new" style="padding:0 16px 16px;border-top:1px solid var(--line2)">
-    <div class="row" style="margin-top:14px">
+    <div class="field" style="margin-top:14px">
+      <label class="fl">需求来源 *</label>
+      <div class="flexr" style="gap:8px">
+        {% for k, v in SOURCES.items() %}
+        <label class="pick">
+          <input type="radio" name="source" value="{{ k }}" {{ 'checked' if k == DEFAULT_SOURCE else '' }}>
+          <span class="pick-b"><b>{{ v.name }}</b><span class="xs dim">{{ v.desc }}</span></span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
       <div><label class="fl">客户</label><input type="text" name="customer_name" placeholder="宏昌实业"></div>
       <div><label class="fl">产品 / 项目名 *</label><input type="text" name="product_name" required placeholder="电饭煲上盖注塑模"></div>
       <div><label class="fl">交期</label><input type="date" name="due_date"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label class="fl">做色 / 表面处理要求</label>
+        <input type="text" name="color_req" placeholder="例：镜框砂黑哑光；镜片 PC 透明，透光率 ≥88%"></div>
+      <div><label class="fl">客户料号 / 图号</label><input type="text" name="customer_part_no" placeholder="KL-8891"></div>
     </div>
     <div class="field" style="margin-top:10px">
       <label class="fl">客户需求</label>
       <textarea name="requirements" placeholder="外观件，A 面高光；卡扣结构需一次脱模；材质 ABS+PC；客户已提供 3D 与 2D 文件各一份。"></textarea>
     </div>
-    <button class="btn primary" type="submit">创建订单</button>
+    <button class="btn primary" type="submit">创建需求</button>
   </form>
 </details>
 
+<div class="flexr" style="margin-bottom:10px;gap:6px;flex-wrap:wrap">
+  <a class="btn sm {{ 'primary' if not cur_src else '' }}" href="/orders{{ ('?s=' ~ cur_s) if cur_s else '' }}">全部来源 {{ counts.values()|sum }}</a>
+  {% for k, v in SOURCES.items() %}
+  <a class="btn sm {{ 'primary' if cur_src == k else '' }}"
+     href="/orders?src={{ k }}{{ ('&s=' ~ cur_s) if cur_s else '' }}">{{ v.name }} {{ counts[k] }}</a>
+  {% endfor %}
+</div>
+
 <div class="flexr" style="margin-bottom:12px;gap:6px;flex-wrap:wrap">
-  <a class="btn sm {{ 'primary' if not cur_s else '' }}" href="/orders">全部</a>
+  <a class="btn sm {{ 'primary' if not cur_s else '' }}" href="/orders{{ ('?src=' ~ cur_src) if cur_src else '' }}">全部</a>
   {% for s in STAGES %}
-  <a class="btn sm {{ 'primary' if cur_s == s.no else '' }}" href="/orders?s={{ s.no }}">{{ '%02d'|format(s.no) }} {{ s.name }}</a>
+  <a class="btn sm {{ 'primary' if cur_s == s.no else '' }}"
+     href="/orders?s={{ s.no }}{{ ('&src=' ~ cur_src) if cur_src else '' }}">{{ '%02d'|format(s.no) }} {{ s.name }}</a>
   {% endfor %}
 </div>
 
@@ -38,7 +63,7 @@
   <div class="bd tight">
     <table>
       <thead><tr>
-        <th style="width:126px">单号</th><th>产品 / 客户</th><th style="width:150px">当前环节</th>
+        <th style="width:126px">单号</th><th style="width:66px">来源</th><th>产品 / 客户</th><th style="width:150px">当前环节</th>
         <th class="mid" style="width:62px">图档</th><th class="mid" style="width:62px">BOM</th>
         <th style="width:96px">交期</th><th style="width:110px">最近更新</th>
       </tr></thead>
@@ -47,6 +72,7 @@
         <tr>
           <td><a href="/orders/{{ o.id }}" class="mono">{{ o.code }}</a>
             {% if o.status == 'closed' %}<span class="tag">已结案</span>{% endif %}</td>
+          <td><span class="src src-{{ o.src_info.key }}">{{ o.src_info.short }}</span></td>
           <td><b>{{ o.product_name }}</b><div class="xs dim">{{ o.customer_name or '—' }}</div></td>
           <td>
             <span class="tag dept-{{ o.stage_info.dept }}" style="font-weight:650;font-size:11.5px">{{ '%02d'|format(o.stage_info.no) }} {{ o.stage_info.name }}</span>
@@ -58,7 +84,7 @@
         </tr>
       {% endfor %}
       {% if not rows %}
-        <tr><td colspan="7"><div class="empty"><div class="big">▤</div>该环节暂无订单</div></td></tr>
+        <tr><td colspan="8"><div class="empty"><div class="big">▤</div>该条件下暂无需求</div></td></tr>
       {% endif %}
       </tbody>
     </table>
