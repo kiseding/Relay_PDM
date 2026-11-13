@@ -13,7 +13,7 @@
 
 <details class="card" id="neworder" style="margin-bottom:16px">
   <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">＋ 新建需求</summary>
-  <form method="post" action="/orders/new" style="padding:0 16px 16px;border-top:1px solid var(--line2)">
+  <form method="post" action="/orders/new" enctype="multipart/form-data" style="padding:0 16px 16px;border-top:1px solid var(--line2)">
     <div class="field" style="margin-top:14px">
       <label class="fl">需求来源 *</label>
       <div class="flexr" style="gap:8px">
@@ -26,7 +26,16 @@
       </div>
     </div>
     <div class="row" style="margin-top:10px">
-      <div><label class="fl">客户</label><input type="text" name="customer_name" placeholder="宏昌实业"></div>
+      <div><label class="fl">客户</label>
+        <div class="flexr" style="gap:6px">
+          <select name="customer_name" id="custSel" style="flex:1">
+            <option value="">— 请选择客户 —</option>
+            {% for c in customers %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}
+          </select>
+          <button class="btn sm" type="button" onclick="document.getElementById('newcust').showModal()"
+                  style="flex:0 0 auto" title="列表中找不到时，先建一个新客户">＋ 新建</button>
+        </div>
+      </div>
       <div><label class="fl">产品 / 项目名 *</label><input type="text" name="product_name" required placeholder="电饭煲上盖注塑模"></div>
       <div><label class="fl">交期</label><input type="date" name="due_date"></div>
     </div>
@@ -34,14 +43,57 @@
       <div><label class="fl">做色 / 表面处理要求</label>
         <input type="text" name="color_req" placeholder="例：镜框砂黑哑光；镜片 PC 透明，透光率 ≥88%"></div>
       <div><label class="fl">客户料号 / 图号</label><input type="text" name="customer_part_no" placeholder="KL-8891"></div>
+      <div><label class="fl">后工艺</label>
+        <select name="finishing_kind">
+          <option value="">— 未定 —</option>
+          {% for f in FINISHING %}<option value="{{ f.k }}">{{ f.name }}</option>{% endfor %}
+        </select></div>
     </div>
     <div class="field" style="margin-top:10px">
       <label class="fl">客户需求</label>
       <textarea name="requirements" placeholder="外观件，A 面高光；卡扣结构需一次脱模；材质 ABS+PC；客户已提供 3D 与 2D 文件各一份。"></textarea>
     </div>
+    <div class="field" style="margin-top:10px">
+      <label class="fl">客户资料</label>
+      <label class="drop" id="dropZone">
+        <input type="file" name="files" id="fileInput" multiple>
+        <span class="drop-ic">⇪</span>
+        <span class="drop-t">点击选择，或把客户发来的 3D / 2D / 样板照片拖进来</span>
+        <span class="xs dim">可多选；单个不超过 200MB。这里只做资料留档，不计入主流程的图档齐套。</span>
+      </label>
+      <div id="fileList" class="filelist"></div>
+    </div>
     <button class="btn primary" type="submit">创建需求</button>
   </form>
 </details>
+
+<dialog id="newcust" class="dlg">
+  <form id="newcustForm" onsubmit="return submitCust(event)">
+    <div class="dlg-hd">
+      <h3>新建客户</h3>
+      <button class="btn sm ghost" type="button" onclick="document.getElementById('newcust').close()">关闭</button>
+    </div>
+    <div class="dlg-bd">
+      <div class="field">
+        <label class="fl">客户名称 *</label>
+        <input type="text" name="name" id="ncName" required placeholder="例：蕉下">
+      </div>
+      <div class="field" style="margin-top:10px">
+        <label class="fl">联系人 / 电话</label>
+        <input type="text" name="contact" placeholder="例：陈经理 138****6621">
+      </div>
+      <div class="field" style="margin-top:10px">
+        <label class="fl">备注</label>
+        <input type="text" name="note" placeholder="例：老客户，走月结">
+      </div>
+      <div id="ncErr" class="xs" style="color:var(--red);margin-top:8px;display:none"></div>
+    </div>
+    <div class="dlg-ft">
+      <button class="btn" type="button" onclick="document.getElementById('newcust').close()">取消</button>
+      <button class="btn primary" type="submit">创建并选中</button>
+    </div>
+  </form>
+</dialog>
 
 <div class="flexr" style="margin-bottom:10px;gap:6px;flex-wrap:wrap">
   <a class="btn sm {{ 'primary' if not cur_src else '' }}" href="/orders{{ ('?s=' ~ cur_s) if cur_s else '' }}">全部来源 {{ counts.values()|sum }}</a>
@@ -90,4 +142,52 @@
     </table>
   </div>
 </div>
+
+<script>
+async function submitCust(e) {
+  e.preventDefault();
+  const f = e.target, err = document.getElementById('ncErr');
+  err.style.display = 'none';
+  const body = new FormData(f);
+  body.set('back', '/api');
+  const r = await fetch('/customers/new', { method: 'POST', body });
+  const j = await r.json();
+  if (!j.ok) { err.textContent = j.err || '创建失败'; err.style.display = 'block'; return false; }
+  const sel = document.getElementById('custSel');
+  let op = [...sel.options].find(o => o.value === j.name);
+  if (!op) { op = new Option(j.name, j.name); sel.add(op); }
+  sel.value = j.name;
+  document.getElementById('newcust').close();
+  f.reset();
+  return false;
+}
+
+// 附件：选择/拖入后在下方列出文件名与大小
+function fmtSize(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(0) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+const fi = document.getElementById('fileInput');
+const fl = document.getElementById('fileList');
+function renderFiles() {
+  const fs = [...fi.files];
+  fl.innerHTML = fs.map(f =>
+    `<span class="fchip">${f.name} <i>${fmtSize(f.size)}</i></span>`).join('');
+  document.getElementById('dropZone').classList.toggle('has', fs.length > 0);
+}
+if (fi) {
+  fi.addEventListener('change', renderFiles);
+  const dz = document.getElementById('dropZone');
+  ['dragover', 'dragenter'].forEach(ev => dz.addEventListener(ev, e => {
+    e.preventDefault(); dz.classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => {
+    e.preventDefault(); dz.classList.remove('over');
+  }));
+  dz.addEventListener('drop', e => {
+    if (e.dataTransfer.files.length) { fi.files = e.dataTransfer.files; renderFiles(); }
+  });
+}
+</script>
 {% endblock %}

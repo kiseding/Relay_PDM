@@ -22,21 +22,55 @@ DEPTS = {
     "structure": "设计部·结构",
     "engineering": "工程部",
     "tooling": "模具部",
+    "finishing": "后工艺部",
     "production": "生产部",
     "manage": "管理层",
 }
 
-# 七个环节。dept = 这一环由谁做
+# 八个环节。dept = 这一环由谁做
+# 塑胶产品（眼镜 / 手办类）注塑完不等于成品：喷油、电镀、移印、组装都是必经工序，
+# 且经常是拖交期的那一段，所以单独成一环，堵在谁那里看板能直接看出来。
 STAGES = [
-    {"no": 1, "key": "intake",    "name": "接单",      "dept": "sales",       "do": "客户需求、做色要求、交期"},
-    {"no": 2, "key": "concept",   "name": "外观设计",  "dept": "design",      "do": "效果图、CMF、客户确认"},
-    {"no": 3, "key": "structure", "name": "结构设计",  "dept": "structure",   "do": "3D 建模、分模、2D 出图"},
-    {"no": 4, "key": "moldprep",  "name": "开模准备",  "dept": "engineering", "do": "开模信息表、开模图、装配图"},
-    {"no": 5, "key": "mold",      "name": "开模",      "dept": "tooling",     "do": "报价、采购下单、T0 试模"},
-    {"no": 6, "key": "release",   "name": "工程图发布", "dept": "engineering", "do": "正式工程图、BOM 定版"},
-    {"no": 7, "key": "massprod",  "name": "量产",      "dept": "production",  "do": "按图生产大货"},
+    {"no": 1, "key": "intake",    "name": "接单",        "dept": "sales",       "do": "客户需求、做色要求、交期"},
+    {"no": 2, "key": "concept",   "name": "外观设计",    "dept": "design",      "do": "效果图、CMF、客户确认"},
+    {"no": 3, "key": "structure", "name": "结构设计",    "dept": "structure",   "do": "3D 建模、分模、2D 出图"},
+    {"no": 4, "key": "moldprep",  "name": "开模准备",    "dept": "engineering", "do": "开模信息表、开模图、装配图"},
+    {"no": 5, "key": "mold",      "name": "开模",        "dept": "tooling",     "do": "报价、采购下单、T0 试模"},
+    {"no": 6, "key": "finishing", "name": "后工艺·组装",  "dept": "finishing",   "do": "喷油电镀移印、组装、色板确认"},
+    {"no": 7, "key": "release",   "name": "工程图发布",   "dept": "engineering", "do": "正式工程图、BOM 定版"},
+    {"no": 8, "key": "massprod",  "name": "量产",        "dept": "production",  "do": "按图生产大货"},
 ]
 STAGE_BY_NO = {s["no"]: s for s in STAGES}
+
+# 最终环节号（多处判定用，别再写死 7）
+LAST_STAGE = STAGES[-1]["no"]
+
+# 塑胶件常见的后工艺 / 表面处理。做成字典，BOM 与齐套清单都用它。
+FINISHING_KINDS = [
+    {"k": "paint",    "name": "喷油（手工喷漆）"},
+    {"k": "plating",  "name": "电镀 / 真空镀"},
+    {"k": "printing", "name": "移印 / 丝印"},
+    {"k": "hotstamp", "name": "烫金"},
+    {"k": "water",    "name": "水贴 / 转印"},
+    {"k": "uv",       "name": "UV 喷涂"},
+    {"k": "polish",   "name": "抛光 / 拉丝"},
+    {"k": "texture",  "name": "咬花 / 晒纹"},
+    {"k": "none",     "name": "素材直接使用"},
+]
+FINISHING_BY_KEY = {f["k"]: f for f in FINISHING_KINDS}
+
+# 部件来源：决定要不要挂我方图档
+PART_SOURCES = {
+    "made":  {"k": "made",  "name": "自制件",   "need_doc": True,
+              "desc": "我方设计并注塑，必须有 3D 与 2D 图档"},
+    "buy":   {"k": "buy",   "name": "外购件",   "need_doc": False,
+              "desc": "镜片、螺丝、铰链等供应商件，要规格书与到货确认，不要求我方 3D"},
+    "std":   {"k": "std",   "name": "标准件",   "need_doc": False,
+              "desc": "国标件，只登记型号与数量"},
+    "assy":  {"k": "assy",  "name": "装配体",   "need_doc": False,
+              "desc": "由下级件组成,自身不单独出图"},
+}
+PART_SOURCE_BY_KEY = PART_SOURCES
 
 # 需求来源：自主开发 / 客户来案
 ORDER_SOURCES = {
@@ -66,6 +100,8 @@ STAGE_GATES = {
     2: [
         {"k": "concept", "label": "外观效果图",         "kind": "doc",   "dtype": "外观效果图",
          "why": "结论要落在图档上"},
+        {"k": "cmf",     "label": "色板 / 色号已定",    "kind": "field", "field": "color_std",
+         "why": "颜色靠文字描述必有争议，要有色号或色板编号"},
         {"k": "custok",  "label": "客户确认外观",       "kind": "field", "field": "customer_ok_at",
          "skip": "client", "why": "口头点头不算，要渠道与日期"},
     ],
@@ -74,6 +110,8 @@ STAGE_GATES = {
          "why": "开模唯一依据"},
         {"k": "2d",      "label": "2D 图纸",           "kind": "doc",   "dtype": "2D图纸",
          "why": "尺寸公差靠 2D"},
+        {"k": "shrink",  "label": "缩水与变形已评估",   "kind": "flag",  "field": "shrink_ok",
+         "why": "眼镜细长件、手办薄壁件不改缩水，出来就是翘的"},
     ],
     4: [
         {"k": "info",    "label": "开模信息表",         "kind": "doc",   "dtype": "开模信息",
@@ -84,6 +122,8 @@ STAGE_GATES = {
          "why": "关系不清会被反复追问"},
         {"k": "moldno",  "label": "开模编号已编",       "kind": "flag",  "field": "mold_no_done",
          "why": "工程部统一编，未编不进模具部"},
+        {"k": "fit",     "label": "配镜 / 组装干涉已查", "kind": "flag",  "field": "fit_ok",
+         "why": "镜片沟槽、铰链封胶位这类配合，不查就是试模后返工"},
     ],
     5: [
         {"k": "po",      "label": "模具采购单号",       "kind": "field", "field": "po_no",
@@ -92,12 +132,22 @@ STAGE_GATES = {
          "why": "交期从下单日算"},
         {"k": "t0",      "label": "T0 试模已完成",      "kind": "flag",  "field": "t0_done",
          "why": "未试模就发图，量产必改"},
+        {"k": "t0ok",    "label": "试模样已确认",       "kind": "field", "field": "t0_ok_at",
+         "why": "试出来不等于客户认，要有确认日期"},
     ],
     6: [
+        {"k": "fin",     "label": "后工艺方式已定",     "kind": "field", "field": "finishing_kind",
+         "why": "喷油还是电镀、移印还是烫金，决定工序与成本"},
+        {"k": "finsam",  "label": "后工艺首件已确认",   "kind": "field", "field": "finishing_ok_at",
+         "why": "批量喷油前不对首件，整批颜色跑偏就是整批报废"},
+        {"k": "asmok",   "label": "组装样品已确认",     "kind": "flag",  "field": "assy_ok",
+         "why": "眼镜组装后才知道铰链顺不顺、手办拼缝大不大"},
+    ],
+    7: [
         {"k": "eng",     "label": "正式工程图",         "kind": "doc",   "dtype": "工程图",
          "why": "量产与检验只认它"},
     ],
-    7: [],
+    8: [],
 }
 
 
@@ -248,6 +298,13 @@ CREATE TABLE IF NOT EXISTS orders (
     customer_ok_at   TEXT,
     customer_ok_note TEXT,
     client_ref_done  INTEGER NOT NULL DEFAULT 0,
+    color_std        TEXT,
+    shrink_ok        INTEGER NOT NULL DEFAULT 0,
+    fit_ok           INTEGER NOT NULL DEFAULT 0,
+    t0_ok_at         TEXT,
+    finishing_kind   TEXT,
+    finishing_ok_at  TEXT,
+    assy_ok          INTEGER NOT NULL DEFAULT 0,
     mold_no_done  INTEGER NOT NULL DEFAULT 0,
     po_no         TEXT,
     po_date       TEXT,
@@ -257,7 +314,22 @@ CREATE TABLE IF NOT EXISTS orders (
     updated_at    TEXT NOT NULL
 );
 
--- 打样单（RP / 手样）。可在一单里多次发起，不占用七环节。
+-- 需求附件（客户提供的资料：图档、样板照片、邮件截图等，不进主流程）
+CREATE TABLE IF NOT EXISTS order_files (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id       INTEGER NOT NULL,
+    file_name      TEXT NOT NULL,
+    stored_name    TEXT NOT NULL,
+    size           INTEGER NOT NULL DEFAULT 0,
+    sha256         TEXT,
+    note           TEXT,
+    uploaded_by    INTEGER,
+    uploaded_by_name TEXT,
+    uploaded_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_of_order ON order_files(order_id);
+
+-- 打样单（RP / 手样）。可在一单里多次发起，不占用主流程。
 CREATE TABLE IF NOT EXISTS rp_requests (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     code           TEXT UNIQUE,
@@ -436,6 +508,13 @@ NEW_ORDER_COLS = [
     ("color_req", "TEXT"), ("customer_part_no", "TEXT"),
     ("customer_ok_at", "TEXT"), ("customer_ok_note", "TEXT"),
     ("client_ref_done", "INTEGER NOT NULL DEFAULT 0"),
+    ("color_std", "TEXT"),
+    ("shrink_ok", "INTEGER NOT NULL DEFAULT 0"),
+    ("fit_ok", "INTEGER NOT NULL DEFAULT 0"),
+    ("t0_ok_at", "TEXT"),
+    ("finishing_kind", "TEXT"),
+    ("finishing_ok_at", "TEXT"),
+    ("assy_ok", "INTEGER NOT NULL DEFAULT 0"),
     ("mold_no_done", "INTEGER NOT NULL DEFAULT 0"),
     ("po_no", "TEXT"), ("po_date", "TEXT"),
     ("t0_done", "INTEGER NOT NULL DEFAULT 0"),
@@ -500,8 +579,8 @@ def seed_demo(conn: sqlite3.Connection) -> None:
     ts = now_str()
     day = (datetime.now(TZ8) - timedelta(days=4)).strftime("%Y-%m-%d %H:%M:%S")
 
-    for n, c, note in [("宏昌实业", "陈经理 138****6621", "老客户，走月结"),
-                       ("宁波优家电器", "刘工 137****8890", "新客户，先打样")]:
+    for n, c, note in [("厦门澳捷", "吴经理 138****6621", "眼镜客户，运动镜系列，走月结"),
+                       ("东莞手办工坊", "刘工 137****8890", "手办客户，来图代工")]:
         conn.execute("INSERT INTO customers(name,contact,note,created_at) VALUES(?,?,?,?)", (n, c, note, ts))
 
     def add_order(code, cust, prod, req, due, stage_no, note="", src=DEFAULT_SOURCE):
@@ -563,25 +642,25 @@ def seed_demo(conn: sqlite3.Connection) -> None:
         return hid
 
     # ============ 需求 1：走到第 4 环（工程部手上）
-    o1 = add_order("DD-2026-0113", "宏昌实业", "电饭煲上盖注塑模",
-                   "外观件，A 面高光，卡扣结构要能一次脱模；材质 ABS+PC。客户提供 3D 与 2D 各一份。",
-                   "2026-12-20", 4, "客户交期较紧，先出上盖本体，装饰圈后续补充。")
+    o1 = add_order("DD-2026-0113", "厦门澳捷", "运动眼镜前框 BL2027-61",
+                   "PA12 前框，A 面哑光；铰链埋射，两侧封胶位不少于 0.5mm；配 61/61A 两种圈型。",
+                   "2026-12-20", 4, "客户交期较紧，先出前框本体，鼻托与脚套后续补充。")
 
-    d1 = add_doc(o1, "UG-2601-0113-01", "M-2601-A", "上盖本体", "3D图", "KL-8891, 上盖主体", "客户料号：KL-8891")
-    v1 = add_ver(d1, 1, "上盖本体_v1.prt", "首版，按客户提供的 3D 建模。", "obsolete")
-    v2 = add_ver(d1, 2, "上盖本体_v2.prt", "按 BG-0001 三个卡扣下移 3mm。", "published", chg=1)
+    d1 = add_doc(o1, "UG-2601-0113-01", "M-2601-A", "前框本体", "3D图", "BL2027-61, 前框", "客户料号：BL2027-61")
+    v1 = add_ver(d1, 1, "前框本体_v1.prt", "首版，按客户提供的 IGS 建模。", "obsolete")
+    v2 = add_ver(d1, 2, "前框本体_v2.prt", "按 BG-0001 铰链封胶位加深 0.2mm。", "published", chg=1)
     conn.execute("UPDATE documents SET current_version_id=? WHERE id=?", (v2, d1))
 
-    d2 = add_doc(o1, "UG-2601-0113-02", "M-2601-B", "上盖装饰圈", "2D图纸", "装饰环, KL-8892")
-    v3 = add_ver(d2, 1, "上盖装饰圈_v1.dwg", "首版 2D 尺寸图。", "published")
+    d2 = add_doc(o1, "UG-2601-0113-02", "M-2601-B", "前框镜片沟槽图", "2D图纸", "镜片槽, 61/61A")
+    v3 = add_ver(d2, 1, "前框沟槽_v1.dwg", "首版 2D 尺寸图，含镜片沟槽与装片间隙。", "published")
     conn.execute("UPDATE documents SET current_version_id=? WHERE id=?", (v3, d2))
 
-    d3 = add_doc(o1, "UG-2601-0113-05", "M-2601-E", "卡扣镶件", "3D图", "镶件", "模具部要求单独制作镶件。")
-    v4 = add_ver(d3, 1, "卡扣镶件_v1.prt", "首版，待审批。", "draft")
+    d3 = add_doc(o1, "UG-2601-0113-05", "M-2601-E", "铰链埋射镶件", "3D图", "镶件", "模具部要求单独制作埋射镶件。")
+    v4 = add_ver(d3, 1, "埋射镶件_v1.prt", "首版，待审批。", "draft")
 
-    add_handover(o1, 1, 2, "accepted", "外观方案已获客户确认，转结构设计。", day)
+    add_handover(o1, 1, 2, "accepted", "圈型已获客户确认，转结构设计。", day)
     add_handover(o1, 2, 3, "accepted", "结构 3D 已完成，转工程部确定开模编号。", day)
-    add_handover(o1, 3, 4, "accepted", "开模图与 BOM 初版一并提交，请核对镶件。", ts,
+    add_handover(o1, 3, 4, "accepted", "开模图与 BOM 初版一并提交，请核对埋射镶件。", ts,
                  items=[(d1, v2, "UG-2601-0113-01", "M-2601-A", "上盖本体", "3D图", 2, "上盖本体_v2.prt"),
                         (d2, v3, "UG-2601-0113-02", "M-2601-B", "上盖装饰圈", "2D图纸", 1, "上盖装饰圈_v1.dwg")])
 
@@ -642,17 +721,17 @@ def seed_demo(conn: sqlite3.Connection) -> None:
     )
 
     # ============ 需求 2：刚接单（客案：客户来图）
-    o2 = add_order("DD-2026-0125", "宁波优家电器", "加湿器底座",
-                   "客户已提供完整 3D 与 2D，我司只做转换与结构落地，小批量试产。",
+    o2 = add_order("DD-2026-0125", "东莞手办工坊", "手办人物主体（客案）",
+                   "客户已提供完整 3D 与分件图，我司只做分件、缩水补偿与出图，小批量试产。",
                    "2026-12-05", 1, src="client")
     conn.execute("UPDATE orders SET client_ref_done=1 WHERE id=?", (o2,))
 
     # ============ 需求 3：结构手上（你有活干，自主开发）
-    o3 = add_order("DD-2026-0131", "宏昌实业", "咖啡机外壳",
-                   "双色外壳，A 面要咬花；内部需走线空间，客户希望减重 10%。", "2027-01-15", 3,
+    o3 = add_order("DD-2026-0131", "LKM 运动眼镜", "运动镜圈型 LKM-G8A",
+                   "圈型改中性款，A 面咬花；镜腿铰链需兼容 G8 系列通用件。", "2027-01-15", 3,
                    src="own")
-    d4 = add_doc(o3, "UG-2601-0131-01", None, "外壳主体", "3D图", "咖啡机主壳")
-    v5 = add_ver(d4, 1, "外壳主体_v1.prt", "首版结构，待客户确认外观纹路。", "draft")
+    d4 = add_doc(o3, "UG-2601-0131-01", None, "镜圈主体", "3D图", "G8-A 圈型")
+    v5 = add_ver(d4, 1, "镜圈主体_v1.prt", "首版结构，待客户确认圈型与纹路。", "draft")
     add_handover(o3, 1, 2, "accepted", "需求已明确，转外观设计。", day)
     add_handover(o3, 2, 3, "accepted", "外观方案已定稿（咬花 PT-1102），转结构设计。", ts)
 
@@ -660,23 +739,23 @@ def seed_demo(conn: sqlite3.Connection) -> None:
     def ago(n: int) -> str:
         return (datetime.now(TZ8) - timedelta(days=n)).strftime("%Y-%m-%d %H:%M:%S")
 
-    o4 = add_order("DD-2026-0108", "广东顺德美厨", "榨汁机底座",
-                   "底座与刀座一体，壁厚 2.2；客户要求能过 1.2m 跌落测试。", "2026-12-10", 5,
-                   "模具部反馈前模滑块位置无法加工，待工程部确定改法。")
-    d5 = add_doc(o4, "UG-2601-0108-01", "M-2512-C", "底座主体", "3D图", "刀座一体, MC-7712")
-    v6 = add_ver(d5, 1, "底座主体_v1.prt", "首版，滑块结构按工程部意见改过一次。", "published")
+    o4 = add_order("DD-2026-0108", "厦门澳捷", "运动眼镜镜腿（含包胶）",
+                   "PA66+30GF 镜腿，末端包 TPE 软胶；喷哑光黑，铰链处埋射。", "2026-12-10", 6,
+                   "包胶试模出来有飞边，素材要先喷漆再包胶，等后工艺确认工艺顺序。")
+    d5 = add_doc(o4, "UG-2601-0108-01", "M-2512-C", "镜腿本体", "3D图", "镜腿, AJ-26205")
+    v6 = add_ver(d5, 1, "镜腿本体_v1.prt", "首版，铰链封胶位按工程部意见改过一次。", "published")
     conn.execute("UPDATE documents SET current_version_id=? WHERE id=?", (v6, d5))
-    for i, (f, t) in enumerate([(1, 2), (2, 3), (3, 4), (4, 5)]):
-        add_handover(o4, f, t, "accepted", "按流程转下一环节。", ago(20 - i * 2))
+    for i, (f, t) in enumerate([(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)]):
+        add_handover(o4, f, t, "accepted", "按流程转下一环节。", ago(18 - i * 2))
     conn.execute("UPDATE orders SET created_at=?, updated_at=? WHERE id=?", (ago(22), ago(14), o4))
 
-    o5 = add_order("DD-2026-0119", "宏昌实业", "电水壶外壳",
-                   "不锈钢外壳配 PP 内衬，A 面拉丝。", "2026-11-30", 7)
-    d6 = add_doc(o5, "UG-2601-0119-01", "M-2511-B", "外壳主体", "3D图", "壶身")
-    v7 = add_ver(d6, 1, "外壳主体_v1.prt", "定版，已量产。", "published")
+    o5 = add_order("DD-2026-0119", "厦门澳捷", "运动镜镜腿 AJ-26270（已量产）",
+                   "TR90 镜腿，末端包 TPE 软胶；喷哑光黑，铰链埋射。", "2026-11-30", 8)
+    d6 = add_doc(o5, "UG-2601-0119-01", "M-2511-B", "镜腿本体", "3D图", "镜腿, AJ-26270")
+    v7 = add_ver(d6, 1, "镜腿本体_v1.prt", "定版，已量产。", "published")
     conn.execute("UPDATE documents SET current_version_id=? WHERE id=?", (v7, d6))
-    for i, (f, t) in enumerate([(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7)]):
-        add_handover(o5, f, t, "accepted", "按流程转下一环节。", ago(14 - i * 2))
+    for i, (f, t) in enumerate([(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8)]):
+        add_handover(o5, f, t, "accepted", "按流程转下一环节。", ago(15 - i * 2))
     conn.execute("UPDATE orders SET created_at=?, updated_at=? WHERE id=?", (ago(16), ago(4), o5))
 
     # ============ 补齐新字段：让演示数据同时呈现「齐套」与「缺口」两种状态
@@ -702,13 +781,24 @@ def seed_demo(conn: sqlite3.Connection) -> None:
         ("A 面拉丝不锈钢，内衬 PP 本色", "2026-10-20 09:15",
          "PO-2026-1102", "2026-09-18", o5))
 
-    # 第 5 环的需求补开模信息表与装配图（否则演示数据自身过不了第 4 环门槛）
-    for dtype, title, fname in [("开模信息", "底座开模信息表", "MC-7712 开模信息.xlsx"),
-                                ("装配图", "底座装配图", "底座装配图.dwg")]:
+    # 第 6 环的需求补开模信息表与装配图（否则演示数据自身过不了第 4 环门槛）
+    for dtype, title, fname in [("开模信息", "镜腿开模信息表", "AJ-26205 开模信息.xlsx"),
+                                ("装配图", "镜腿装配图", "镜腿装配图.dwg")]:
         d = add_doc(o4, f"UG-2601-0108-{'09' if dtype == '开模信息' else '10'}", "M-2512-C",
                     title, dtype, "")
         v = add_ver(d, 1, fname, "开模前定版。", "published")
         conn.execute("UPDATE documents SET current_version_id=? WHERE id=?", (v, d))
+
+    # 补充行业字段：色号、缩水、配合、T0 确认、后工艺 —— 让演示数据自己过得去门
+    conn.execute("""UPDATE orders SET color_std='PANTONE 419C / 客户色板 SP-30008',
+                    shrink_ok=1, fit_ok=1 WHERE id=?""", (o1,))
+    conn.execute("""UPDATE orders SET color_std='PANTONE 419C',
+                    shrink_ok=1, fit_ok=1, t0_done=1, t0_ok_at='2026-11-05 14:00',
+                    finishing_kind='paint' WHERE id=?""", (o4,))
+    conn.execute("""UPDATE orders SET color_std='PANTONE 419C', shrink_ok=1, fit_ok=1,
+                    t0_done=1, t0_ok_at='2026-10-28 10:00',
+                    finishing_kind='paint', finishing_ok_at='2026-11-02 09:30',
+                    assy_ok=1 WHERE id=?""", (o5,))
 
     # 打样单：一单在手，一单已交付
     conn.execute(

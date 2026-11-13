@@ -16,7 +16,7 @@ from typing import Optional
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import (FileResponse, HTMLResponse, PlainTextResponse,
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, PlainTextResponse,
                                RedirectResponse, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -206,6 +206,7 @@ def render(request: Request, name: str, **ctx):
         "STAGE_GATES": db.STAGE_GATES,
         "DOC_TYPES": db.DOC_TYPES,
         "BOM_SOURCES": db.BOM_SOURCES,
+        "FINISHING": db.FINISHING_KINDS,
         "BOM_UNITS": db.BOM_UNITS,
         "ROLE_NAMES": db.ROLE_NAMES,
         "nav_counts": nav_counts(me),
@@ -260,8 +261,8 @@ def dashboard(request: Request):
             d = dict(r)
             d["stage_info"] = st
             d["ho"] = dict(ho) if ho else None
-            # 第 7 环是最后一环，没有下一环节可交，不进待办
-            if not ho and st["no"] < 7 and (st["dept"] == me["dept"] or me["role"] == "admin"):
+            # 最后一环没有下一环节可交，不进待办
+            if not ho and st["no"] < db.LAST_STAGE and (st["dept"] == me["dept"] or me["role"] == "admin"):
                 todo_submit.append(d)
             if ho and ho["status"] == "approved" and (db.stage(ho["to_stage"])["dept"] == me["dept"] or is_mgr):
                 todo_accept.append(d)
@@ -328,7 +329,7 @@ def board(request: Request):
                 blocker = {"pending": "待主管审批", "approved": "待下一环节签收",
                            "rejected": "待重新提交"}[ho["status"]]
             else:
-                flag, fcls = ("量产中" if st["no"] == 7 else "待提交", "todo")
+                flag, fcls = ("量产中" if st["no"] == db.LAST_STAGE else "待提交", "todo")
                 blocker = f"{db.dept_name(st['dept'])}处理中"
                 if gmiss:
                     blocker += f" · 齐套缺 {len(gmiss)} 项"
@@ -416,16 +417,124 @@ def orders_page(request: Request, s: int | None = None, src: str | None = None):
         for k in db.ORDER_SOURCES:
             counts[k] = conn.execute(
                 "SELECT COUNT(*) c FROM orders WHERE COALESCE(source,?)=?", (db.DEFAULT_SOURCE, k)).fetchone()["c"]
+        customers = [dict(r) for r in conn.execute(
+            "SELECT id, name FROM customers ORDER BY name").fetchall()]
         return render(request, "orders.html", rows=rows, cur_s=s, cur_src=src,
-                      SOURCES=db.ORDER_SOURCES, counts=counts, DEFAULT_SOURCE=db.DEFAULT_SOURCE)
+                      SOURCES=db.ORDER_SOURCES, counts=counts, DEFAULT_SOURCE=db.DEFAULT_SOURCE,
+                      customers=customers)
+    finally:
+        conn.close()
+
+
+@app.post("/orders/{oid}/files")
+async def order_files_add(request: Request, oid: int, files: list[UploadFile] = File(default=[]),
+                          note: str = Form("")):
+    """给已有需求补传客户资料。"""
+    me = current_user(request)
+    conn = db.connect()
+    try:
+        o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
+        if not o:
+            return go("/orders", err="未找到该需求")
+        ts, names = db.now_str(), []
+        for f in files:
+            if not f or not f.filename:
+                continue
+            raw = await f.read()
+            if not raw:
+                continue
+            stored = f"{secrets.token_hex(8)}_{Path(f.filename).name}"
+            (FILES_DIR / stored).write_bytes(raw)
+            conn.execute(
+                """INSERT INTO order_files(order_id,file_name,stored_name,size,sha256,note,
+                                           uploaded_by,uploaded_by_name,uploaded_at)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                (oid, f.filename, stored, len(raw), hashlib.sha256(raw).hexdigest(),
+                 note.strip(), me["id"], me["name"], ts))
+            names.append(f.filename)
+        if not names:
+            return go(f"/orders/{oid}", err="没有选择文件")
+        if o["source"] == "client":
+            conn.execute("UPDATE orders SET client_ref_done=1, updated_at=? WHERE id=?", (ts, oid))
+        log(conn, me, "上传客户资料", "order", oid, oid, "、".join(names))
+        conn.commit()
+        return go(f"/orders/{oid}", ok=f"已上传 {len(names)} 个文件")
+    finally:
+        conn.close()
+
+
+@app.post("/orders/{oid}/files/{fid}/del")
+def order_file_del(request: Request, oid: int, fid: int):
+    me = current_user(request)
+    conn = db.connect()
+    try:
+        r = conn.execute("SELECT * FROM order_files WHERE id=? AND order_id=?", (fid, oid)).fetchone()
+        if not r:
+            return go(f"/orders/{oid}", err="文件不存在")
+        conn.execute("DELETE FROM order_files WHERE id=?", (fid,))
+        p = FILES_DIR / r["stored_name"]
+        if p.exists():
+            p.unlink()
+        log(conn, me, "删除客户资料", "order", oid, oid, r["file_name"])
+        conn.commit()
+        return go(f"/orders/{oid}", ok="已删除")
+    finally:
+        conn.close()
+
+
+@app.get("/orders/files/{fid}")
+def order_file_get(request: Request, fid: int):
+    conn = db.connect()
+    try:
+        r = conn.execute("SELECT * FROM order_files WHERE id=?", (fid,)).fetchone()
+    finally:
+        conn.close()
+    if not r:
+        return go("/orders", err="文件不存在")
+    p = FILES_DIR / r["stored_name"]
+    if not p.exists():
+        return go("/orders", err="文件已不存在于磁盘")
+    return FileResponse(p, filename=r["file_name"])
+
+
+@app.post("/customers/new")
+def customer_new(request: Request, name: str = Form(""), contact: str = Form(""),
+                 note: str = Form(""), back: str = Form("/orders")):
+    """新建客户。返回 JSON（供需求表单内联创建）或跳回来源页。"""
+    me = current_user(request)
+    name = name.strip()
+    conn = db.connect()
+    try:
+        if not name:
+            if back.startswith("/api"):
+                return JSONResponse({"ok": False, "err": "客户名称不能为空"})
+            return go(back, err="客户名称不能为空")
+        ts = db.now_str()
+        row = conn.execute("SELECT id FROM customers WHERE name=?", (name,)).fetchone()
+        created = False
+        if row:
+            cid = row["id"]
+        else:
+            cid = conn.execute(
+                "INSERT INTO customers(name,contact,note,created_at) VALUES(?,?,?,?)",
+                (name, contact.strip(), note.strip(), ts)).lastrowid
+            created = True
+            log(conn, me, "新建客户", "customer", cid, None, name)
+        conn.commit()
+        if back.startswith("/api"):
+            return JSONResponse({"ok": True, "id": cid, "name": name, "created": created})
+        return go(back, ok=(f"客户「{name}」已创建" if created else f"客户「{name}」已存在"))
     finally:
         conn.close()
 
 
 @app.post("/orders/new")
-def order_new(request: Request, customer_name: str = Form(""), product_name: str = Form(...),
-              source: str = Form(db.DEFAULT_SOURCE), requirements: str = Form(""),
-              due_date: str = Form(""), color_req: str = Form(""), note: str = Form("")):
+async def order_new(request: Request, customer_name: str = Form(""), product_name: str = Form(...),
+                    source: str = Form(db.DEFAULT_SOURCE), requirements: str = Form(""),
+                    due_date: str = Form(""), color_req: str = Form(""),
+                    customer_part_no: str = Form(""), finishing_kind: str = Form(""),
+                    note: str = Form(""),
+                    files: list[UploadFile] = File(default=[])):
     me = current_user(request)
     if source not in db.ORDER_SOURCES:
         source = db.DEFAULT_SOURCE
@@ -439,15 +548,37 @@ def order_new(request: Request, customer_name: str = Form(""), product_name: str
             code = f"DD-{ts[:4]}-{n:04d}"
         oid = conn.execute(
             """INSERT INTO orders(code,source,customer_name,product_name,sales_name,requirements,due_date,
-                                  color_req,current_stage,status,bom_rev,note,created_by,created_at,updated_at)
-               VALUES(?,?,?,?,?,?,?,?,1,'active',0,?,?,?,?)""",
-            (code, source, customer_name, product_name, me["name"], requirements, due_date,
-             color_req, note, me["id"], ts, ts),
+                                  color_req,customer_part_no,finishing_kind,current_stage,status,bom_rev,note,
+                                  created_by,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,1,'active',0,?,?,?,?)""",
+            (code, source, customer_name.strip(), product_name, me["name"], requirements, due_date,
+             color_req, customer_part_no, finishing_kind, note, me["id"], ts, ts),
         ).lastrowid
-        if customer_name:
-            conn.execute("INSERT OR IGNORE INTO customers(name,created_at) VALUES(?,?)", (customer_name, ts))
+        if customer_name.strip():
+            conn.execute("INSERT OR IGNORE INTO customers(name,created_at) VALUES(?,?)",
+                         (customer_name.strip(), ts))
+        n_file = 0
+        for f in files:
+            if not f or not f.filename:
+                continue
+            raw = await f.read()
+            if not raw:
+                continue
+            stored = f"{secrets.token_hex(8)}_{Path(f.filename).name}"
+            (FILES_DIR / stored).write_bytes(raw)
+            conn.execute(
+                """INSERT INTO order_files(order_id,file_name,stored_name,size,sha256,
+                                           uploaded_by,uploaded_by_name,uploaded_at)
+                   VALUES(?,?,?,?,?,?,?,?)""",
+                (oid, f.filename, stored, len(raw), hashlib.sha256(raw).hexdigest(),
+                 me["id"], me["name"], ts))
+            n_file += 1
+        if n_file:
+            # 客案：客户资料齐了，自动勾上齐套清单里的这一项
+            conn.execute("UPDATE orders SET client_ref_done=1 WHERE id=?", (oid,))
         log(conn, me, "创建需求", "order", oid, oid,
-            f"{code} {product_name}（{db.order_source(source)['name']}）")
+            f"{code} {product_name}（{db.order_source(source)['name']}）"
+            + (f"，附 {n_file} 个客户资料" if n_file else ""))
         conn.commit()
         return go(f"/orders/{oid}", ok="需求已创建")
     finally:
@@ -508,13 +639,16 @@ def order_detail(request: Request, oid: int):
                LEFT JOIN documents d ON d.id=r.document_id
                LEFT JOIN doc_versions v ON v.id=r.version_id
                WHERE r.order_id=? ORDER BY r.id DESC""", (oid,)).fetchall()]
+        ofiles = [dict(r) for r in conn.execute(
+            "SELECT * FROM order_files WHERE order_id=? ORDER BY id DESC", (oid,)).fetchall()]
         can_submit = (cur["dept"] == me["dept"] or me["role"] in ("manager", "admin")) and \
-            o["status"] == "active" and cur["no"] < 7 and \
+            o["status"] == "active" and cur["no"] < db.LAST_STAGE and \
             not any(h["status"] in ("pending", "approved") for h in handovers)
         return render(request, "order_detail.html", o=o, docs=docs, handovers=handovers,
                       changes=changes, bom=bom, logs=logs, cur=cur, can_submit=can_submit,
                       steps=steps, lamps=lamps, gate=gate, gate_miss=gate_miss, rps=rps,
-                      src_info=db.order_source(o.get("source")), SOURCES=db.ORDER_SOURCES)
+                      src_info=db.order_source(o.get("source")), SOURCES=db.ORDER_SOURCES,
+                      ofiles=ofiles)
     finally:
         conn.close()
 
@@ -523,9 +657,12 @@ def order_detail(request: Request, oid: int):
 def order_fill(request: Request, oid: int,
                color_req: str = Form(""), customer_part_no: str = Form(""),
                customer_ok_at: str = Form(""), customer_ok_note: str = Form(""),
+               color_std: str = Form(""), t0_ok_at: str = Form(""),
+               finishing_kind: str = Form(""), finishing_ok_at: str = Form(""),
                po_no: str = Form(""), po_date: str = Form(""),
                mold_no_done: str = Form(""), t0_done: str = Form(""),
-               client_ref_done: str = Form("")):
+               client_ref_done: str = Form(""), shrink_ok: str = Form(""),
+               fit_ok: str = Form(""), assy_ok: str = Form("")):
     """补录齐套清单里缺的项。空的输入不覆盖已有值。"""
     me = current_user(request)
     conn = db.connect()
@@ -536,13 +673,16 @@ def order_fill(request: Request, oid: int,
         sets, args, touched = [], [], []
         for k, v in [("color_req", color_req), ("customer_part_no", customer_part_no),
                      ("customer_ok_at", customer_ok_at), ("customer_ok_note", customer_ok_note),
+                     ("color_std", color_std), ("t0_ok_at", t0_ok_at),
+                     ("finishing_kind", finishing_kind), ("finishing_ok_at", finishing_ok_at),
                      ("po_no", po_no), ("po_date", po_date)]:
             if v.strip():
                 sets.append(f"{k}=?")
                 args.append(v.strip())
                 touched.append(k)
         for k, v in [("mold_no_done", mold_no_done), ("t0_done", t0_done),
-                     ("client_ref_done", client_ref_done)]:
+                     ("client_ref_done", client_ref_done), ("shrink_ok", shrink_ok),
+                     ("fit_ok", fit_ok), ("assy_ok", assy_ok)]:
             if v == "on":
                 sets.append(f"{k}=1")
                 touched.append(k)

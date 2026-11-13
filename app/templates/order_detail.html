@@ -77,7 +77,7 @@
       </tbody>
     </table>
     {% if gate_miss %}
-    {% set fillable = gate_miss | selectattr('k', 'in', ['color','custok','clientref','po','podate','moldno','t0']) | list %}
+    {% set fillable = gate_miss | selectattr('k', 'in', ['color','cmf','custok','clientref','shrink','fit','po','podate','moldno','t0','t0ok','fin','finsam','asmok']) | list %}
     {% if fillable %}
     <form method="post" action="/orders/{{ o.id }}/fill" class="gatefill" style="padding:0 16px 14px">
       <div class="xs dim" style="margin:11px 0 8px">图档类缺口请先到<a href="/docs">图档</a>页创建</div>
@@ -87,6 +87,11 @@
           <div class="field" style="grid-column:1/-1">
             <label class="fl">做色 / 表面处理要求</label>
             <textarea name="color_req" rows="2" placeholder="例：镜框砂黑手工喷漆哑光；镜片 PC 透明，透光率 ≥88%"></textarea>
+          </div>
+          {% elif g.k == 'cmf' %}
+          <div class="field">
+            <label class="fl">色板 / 色号</label>
+            <input type="text" name="color_std" placeholder="例：PANTONE 419C；或客户色板编号 SP-30008">
           </div>
           {% elif g.k == 'custok' %}
           <div class="field">
@@ -111,6 +116,32 @@
           <label class="checkline"><input type="checkbox" name="mold_no_done" checked> 开模编号已编入各图档</label>
           {% elif g.k == 'clientref' %}
           <label class="checkline"><input type="checkbox" name="client_ref_done"> 客户原始 3D / 2D / 样板已收齐留档</label>
+          {% elif g.k == 'shrink' %}
+          <label class="checkline"><input type="checkbox" name="shrink_ok"> 缩水率与变形已评估（细长件 / 薄壁件必查）</label>
+          {% elif g.k == 'fit' %}
+          <label class="checkline"><input type="checkbox" name="fit_ok"> 配镜 / 组装干涉已检查（沟槽、铰链封胶位）</label>
+          {% elif g.k == 't0ok' %}
+          <div class="field" style="grid-column:1/-1">
+            <label class="fl">试模样已确认时间</label>
+            <input type="text" name="t0_ok_at" placeholder="2026-11-10 15:30">
+          </div>
+          {% elif g.k == 'fin' %}
+          <div class="field" style="grid-column:1/-1">
+            <label class="fl">后工艺方式</label>
+            <select name="finishing_kind">
+              <option value="">— 请选择 —</option>
+              {% for f in FINISHING %}
+              <option value="{{ f.k }}">{{ f.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% elif g.k == 'finsam' %}
+          <div class="field" style="grid-column:1/-1">
+            <label class="fl">后工艺首件确认时间</label>
+            <input type="text" name="finishing_ok_at" placeholder="2026-11-12 09:00">
+          </div>
+          {% elif g.k == 'asmok' %}
+          <label class="checkline"><input type="checkbox" name="assy_ok"> 组装样品已确认（铰链手感、拼缝、配镜）</label>
           {% elif g.k == 't0' %}
           <label class="checkline"><input type="checkbox" name="t0_done"> T0 试模已完成并确认</label>
           {% endif %}
@@ -300,16 +331,70 @@
         <div class="hr"></div>
         <dl class="kv">
           <dt>做色要求</dt><dd>{{ o.color_req or '—' }}</dd>
+          {% if o.color_std %}<dt>色板 / 色号</dt><dd class="mono">{{ o.color_std }}</dd>{% endif %}
+          {% if o.finishing_kind %}
+          <dt>后工艺</dt><dd>{{ FINISHING | selectattr('k','equalto',o.finishing_kind) | map(attribute='name') | first or o.finishing_kind }}</dd>
+          {% endif %}
           <dt>客户料号</dt><dd class="mono">{{ o.customer_part_no or '—' }}</dd>
           <dt>客户确认</dt>
           <dd>{% if o.customer_ok_at %}{{ o.customer_ok_at }}
               <div class="xs dim">{{ o.customer_ok_note or '' }}</div>
               {% else %}<span class="dim">未记录</span>{% endif %}</dd>
+          {% if o.t0_ok_at %}<dt>试样确认</dt><dd>{{ o.t0_ok_at }}</dd>{% endif %}
+          {% if o.finishing_ok_at %}<dt>工艺首件</dt><dd>{{ o.finishing_ok_at }}</dd>{% endif %}
           {% if o.po_no %}
           <dt>模具采购单</dt><dd class="mono">{{ o.po_no }}<span class="xs dim"> · {{ o.po_date or '下单日未记' }}</span></dd>
           {% endif %}
         </dl>
         {% if o.note %}<div class="xs dim" style="margin-top:8px">{{ o.note }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="hd">
+        <h3>客户资料</h3>
+        <div class="sp"></div>
+        <button class="btn sm ghost" type="button"
+                onclick="document.getElementById('addfile').open=!document.getElementById('addfile').open">
+          {{ '收起' if ofiles else '＋ 上传' }}</button>
+      </div>
+      <div class="bd">
+        <details id="addfile" {{ 'open' if not ofiles else '' }}>
+          <summary style="list-style:none;cursor:pointer;font-size:12.5px;color:var(--muted)">
+            客户发来的 3D / 2D / 样板照片等原始资料，留档备查
+          </summary>
+          <form method="post" action="/orders/{{ o.id }}/files" enctype="multipart/form-data"
+                style="margin-top:10px">
+            <label class="drop" id="dropZone2">
+              <input type="file" name="files" id="fileInput2" multiple>
+              <span class="drop-ic">⇪</span>
+              <span class="drop-t">点击选择，或把文件拖进来（可多选）</span>
+            </label>
+            <div id="fileList2" class="filelist"></div>
+            <button class="btn primary sm" type="submit" style="margin-top:10px">上传</button>
+          </form>
+        </details>
+        {% if ofiles %}
+        <div style="margin-top:10px">
+          {% for f in ofiles %}
+          <div class="ofile">
+            <div class="of-ic">▤</div>
+            <div class="of-b">
+              <div class="of-n"><a href="/orders/files/{{ f.id }}">{{ f.file_name }}</a></div>
+              <div class="of-m">{{ f.uploaded_by_name or '—' }} · {{ f.uploaded_at[5:16] }}
+                {%- if f.size %} · {{ '%.0f'|format(f.size / 1024) }} KB{% endif %}
+                {%- if f.note %} · {{ f.note }}{% endif %}</div>
+            </div>
+            {% if me.role in ('manager','admin') or me.id == f.uploaded_by %}
+            <form method="post" action="/orders/{{ o.id }}/files/{{ f.id }}/del"
+                  onsubmit="return confirm('确认删除「{{ f.file_name }}」？')">
+              <button class="btn sm ghost" type="submit">删除</button>
+            </form>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
     </div>
 
@@ -353,4 +438,32 @@
     </div>
   </div>
 </div>
+
+<script>
+function fmtSize(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(0) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+(function () {
+  const fi = document.getElementById('fileInput2');
+  const fl = document.getElementById('fileList2');
+  if (!fi) return;
+  const dz = document.getElementById('dropZone2');
+  const render = () => {
+    fl.innerHTML = [...fi.files].map(f => `<span class="fchip">${f.name} <i>${fmtSize(f.size)}</i></span>`).join('');
+    dz.classList.toggle('has', fi.files.length > 0);
+  };
+  fi.addEventListener('change', render);
+  ['dragover', 'dragenter'].forEach(ev => dz.addEventListener(ev, e => {
+    e.preventDefault(); dz.classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => {
+    e.preventDefault(); dz.classList.remove('over');
+  }));
+  dz.addEventListener('drop', e => {
+    if (e.dataTransfer.files.length) { fi.files = e.dataTransfer.files; render(); }
+  });
+})();
+</script>
 {% endblock %}
