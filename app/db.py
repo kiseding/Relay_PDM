@@ -239,6 +239,104 @@ BOM_UNITS = ["件", "套", "个", "米", "克", "张"]
 
 ROLE_NAMES = {"admin": "管理员", "manager": "主管", "staff": "员工"}
 
+# 操作记录里显示的中文字段名（记录审计时用，别让人看到 color_std 这种键）
+ORDER_FIELD_LABELS = {
+    "customer_name": "客户", "product_name": "产品名", "due_date": "交期",
+    "requirements": "需求说明", "customer_part_no": "客户料号", "note": "备注",
+    "color_req": "做色要求", "color_std": "色板色号", "source": "需求来源",
+    "customer_ok_at": "客户确认时间", "customer_ok_note": "客户确认备注",
+    "t0_ok_at": "试样确认时间", "finishing_kind": "后工艺方式",
+    "finishing_ok_at": "后工艺首件确认", "po_no": "模具采购单号", "po_date": "下单日期",
+    "mold_no_done": "开模编号已编", "t0_done": "T0 试模完成",
+    "client_ref_done": "客案原始资料已收", "shrink_ok": "缩水与变形已评估",
+    "fit_ok": "配镜组装干涉已查", "assy_ok": "组装样品已确认",
+}
+
+BOM_FIELD_LABELS = {
+    "part_no": "零件号", "part_name": "零件名称", "spec": "规格材质", "qty": "数量",
+    "unit": "单位", "source": "来源", "parent_id": "上级件", "document_id": "对应图档",
+    "note": "备注",
+}
+
+# ---------------------------------------------------------------- 修改权限
+# 操作失误难免，所以凡是能录进来的都要能改。但不能人人能改，
+# 这里集中定义「谁能改什么」，页面只负责按 can() 决定按钮显不显示。
+#   scope: own_dept → 本部门的人可以改；mgr → 主管及以上；
+#          owner → 建单人自己 + 主管；admin → 仅管理员
+EDIT_RULES = {
+    # 需求基本信息（客户、产品名、交期、需求说明、料号、备注）
+    "order.base":       {"scope": "owner",    "label": "需求基本信息"},
+    # 需求来源（自主/客案）
+    "order.source":     {"scope": "mgr",      "label": "需求来源"},
+    # 交期（影响排产，单独收紧）
+    "order.due":        {"scope": "mgr",      "label": "交期"},
+    # 做色要求、色号、后工艺这类技术参数
+    "order.tech":       {"scope": "own_dept", "dept": ("sales", "design", "engineering"),
+                         "label": "技术参数"},
+    # 图档属性（名称、类型、别名、备注）
+    "doc.meta":         {"scope": "own_dept", "dept": ("design", "structure", "engineering"),
+                         "label": "图档信息"},
+    # 开模编号（工程部统一编）
+    "doc.mold_no":      {"scope": "own_dept", "dept": ("engineering",), "label": "开模编号"},
+    # BOM 增删改（工程部）
+    "bom.edit":         {"scope": "own_dept", "dept": ("engineering",), "label": "BOM"},
+    # 打样单状态
+    "rp.edit":          {"scope": "own_dept", "dept": ("engineering", "sales", "design"),
+                         "label": "打样单"},
+    # 客户资料附件
+    "order.files":      {"scope": "owner",    "label": "客户资料"},
+    # 结案 / 作废
+    "order.close":      {"scope": "mgr",      "label": "结案"},
+}
+
+
+def can(me: dict | None, action: str, order: dict | None = None) -> bool:
+    """判断当前用户能否执行某个修改动作。
+
+    管理员永远可以；其余按 EDIT_RULES 的 scope 判定。
+    order 用于 owner / own_dept 判定（需要知道建单人与所属部门）。
+    """
+    if not me:
+        return False
+    rule = EDIT_RULES.get(action)
+    if not rule:
+        return False
+    if me.get("role") == "admin":
+        return True
+    scope = rule["scope"]
+    if scope == "admin":
+        return False
+    if scope == "mgr":
+        return me.get("role") in ("manager", "admin")
+    if scope == "own_dept":
+        depts = rule.get("dept") or ()
+        return me.get("dept") in depts or me.get("role") == "manager"
+    if scope == "owner":
+        if me.get("role") == "manager":
+            return True
+        if order is None:
+            return False
+        return order.get("created_by") == me.get("id")
+    return False
+
+
+def can_edit_note(me: dict | None, action: str, order: dict | None = None) -> str:
+    """返回为什么不能改，便于提示。"""
+    if not me:
+        return "请先登录"
+    if me.get("role") == "admin":
+        return ""
+    rule = EDIT_RULES.get(action) or {}
+    if rule.get("scope") == "admin":
+        return f"{rule.get('label','该数据')}仅管理员可修改"
+    if rule.get("scope") == "mgr" and me.get("role") != "manager":
+        return f"{rule.get('label','该数据')}需要主管或管理员修改"
+    if rule.get("scope") == "own_dept":
+        return f"{rule.get('label','该数据')}由{'、'.join(DEPTS.get(d, d) for d in rule.get('dept', ()))}维护"
+    if rule.get("scope") == "owner":
+        return f"{rule.get('label','该数据')}仅建单人或主管可修改"
+    return "当前账号无修改权限"
+
 
 def now_str() -> str:
     return datetime.now(TZ8).strftime("%Y-%m-%d %H:%M:%S")
@@ -269,7 +367,8 @@ CREATE TABLE IF NOT EXISTS users (
     role       TEXT NOT NULL DEFAULT 'staff',
     pwd_hash   TEXT NOT NULL,
     active     INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS customers (
@@ -526,6 +625,10 @@ def migrate(conn: sqlite3.Connection) -> None:
     for name, decl in NEW_ORDER_COLS:
         if name not in have:
             conn.execute(f"ALTER TABLE orders ADD COLUMN {name} {decl}")
+    # 账号也允许改（调岗、改角色），留一个更新时间
+    uhave = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
+    if "updated_at" not in uhave:
+        conn.execute("ALTER TABLE users ADD COLUMN updated_at TEXT")
 
 
 def init_db() -> None:
@@ -587,7 +690,7 @@ def seed_demo(conn: sqlite3.Connection) -> None:
         return conn.execute(
             """INSERT INTO orders(code,source,customer_name,product_name,sales_name,requirements,due_date,
                                   current_stage,status,bom_rev,note,created_by,created_at,updated_at)
-               VALUES(?,?,?,?,?,?,?,?,'active',0,?,3,?,?)""",
+               VALUES(?,?,?,?,?,?,?,?,'active',0,?,2,?,?)""",
             (code, src, cust, prod, "李强", req, due, stage_no, note, day, ts),
         ).lastrowid
 
@@ -661,16 +764,16 @@ def seed_demo(conn: sqlite3.Connection) -> None:
     add_handover(o1, 1, 2, "accepted", "圈型已获客户确认，转结构设计。", day)
     add_handover(o1, 2, 3, "accepted", "结构 3D 已完成，转工程部确定开模编号。", day)
     add_handover(o1, 3, 4, "accepted", "开模图与 BOM 初版一并提交，请核对埋射镶件。", ts,
-                 items=[(d1, v2, "UG-2601-0113-01", "M-2601-A", "上盖本体", "3D图", 2, "上盖本体_v2.prt"),
-                        (d2, v3, "UG-2601-0113-02", "M-2601-B", "上盖装饰圈", "2D图纸", 1, "上盖装饰圈_v1.dwg")])
+                 items=[(d1, v2, "UG-2601-0113-01", "M-2601-A", "前框本体", "3D图", 2, "前框本体_v2.prt"),
+                        (d2, v3, "UG-2601-0113-02", "M-2601-B", "前框沟槽图", "2D图纸", 1, "前框沟槽_v1.dwg")])
 
     # BOM：三层，其中一行故意黄灯
     bom_rows = [
-        (None, 0, "SP-2601-00", "上盖组件", "ABS+PC 本色", 1, "套", "装配", None, ""),
-        (None, 0, "UG-2601-0113-01", "上盖本体", "ABS+PC 本色", 1, "件", "自制", d1, ""),
-        (None, 0, "UG-2601-0113-02", "上盖装饰圈", "PC 透明", 1, "件", "自制", d2, ""),
-        (None, 0, "GB/T 818 M2×5", "十字槽盘头螺钉", "不锈钢", 3, "件", "标准件", None, ""),
-        (None, 0, "UG-2601-0113-05", "卡扣镶件", "S136 淬火", 2, "件", "自制", None, "图档尚未关联，待模具部确认结构。"),
+        (None, 0, "SP-2601-00", "前框组件", "PA12 哑光", 1, "套", "装配", None, ""),
+        (None, 0, "UG-2601-0113-01", "前框本体", "PA12", 1, "件", "自制", d1, ""),
+        (None, 0, "UG-2601-0113-02", "镜片沟槽镶件", "PC 透明", 1, "件", "自制", d2, ""),
+        (None, 0, "GB/T 818 M1.4×3", "铰链螺钉", "不锈钢", 2, "件", "标准件", None, ""),
+        (None, 0, "UG-2601-0113-05", "铰链埋射镶件", "S136 淬火", 2, "件", "自制", None, "图档尚未关联，待模具部确认封胶位。"),
     ]
     parent_map = {}
     for i, (_, seq, pno, pname, spec, qty, unit, src, did, note) in enumerate(bom_rows):
@@ -690,10 +793,10 @@ def seed_demo(conn: sqlite3.Connection) -> None:
 
     # 第 4 环：工程部已提交交接单，等主管审批
     add_handover(o1, 4, 5, "pending", "开模编号 M-2601-A/B/E 已确定，请审批 BOM 与开模图。", ts,
-                 items=[(d1, v2, "UG-2601-0113-01", "M-2601-A", "上盖本体", "3D图", 2, "上盖本体_v2.prt")],
-                 bom=(3, [{"no": "1", "part_no": "SP-2601-00", "part_name": "上盖组件", "spec": "ABS+PC 本色",
+                 items=[(d1, v2, "UG-2601-0113-01", "M-2601-A", "前框本体", "3D图", 2, "前框本体_v2.prt")],
+                 bom=(3, [{"no": "1", "part_no": "SP-2601-00", "part_name": "前框组件", "spec": "PA12 哑光",
                            "qty": 1, "unit": "套", "source": "装配", "doc": "", "lamp": "ok"},
-                          {"no": "1.1", "part_no": "UG-2601-0113-01", "part_name": "上盖本体", "spec": "ABS+PC 本色",
+                          {"no": "1.1", "part_no": "UG-2601-0113-01", "part_name": "前框本体", "spec": "PA12",
                            "qty": 1, "unit": "件", "source": "自制", "doc": "v2 已发布", "lamp": "ok"},
                           {"no": "1.2", "part_no": "UG-2601-0113-02", "part_name": "上盖装饰圈", "spec": "PC 透明",
                            "qty": 1, "unit": "件", "source": "自制", "doc": "v1 已发布", "lamp": "ok"},

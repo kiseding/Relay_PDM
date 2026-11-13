@@ -11,7 +11,7 @@
       {% if o.status == 'closed' %}<span class="tag" style="margin-left:6px">已结案</span>{% endif %}</div>
   </div>
   <div class="sp"></div>
-  {% if me.role in ('manager','admin') and o.status == 'active' %}
+  {% if can_src %}
   <form method="post" action="/orders/{{ o.id }}/source" class="flexr" style="gap:6px;align-items:center">
     <select name="source" class="sel-src" onchange="this.form.submit()" title="修改需求来源">
       {% for k, v in SOURCES.items() %}
@@ -19,6 +19,8 @@
       {% endfor %}
     </select>
   </form>
+  {% else %}
+  <span class="src src-{{ src_info.key }}" style="align-self:center">{{ src_info.name }}</span>
   {% endif %}
   <a class="btn" href="/bom/{{ o.id }}">BOM（{{ bom|length }} 行）</a>
   {% if can_submit %}
@@ -33,9 +35,13 @@
       <span class="tag dept-{{ cur.dept }}">{{ dept_name(cur.dept) }}</span>
       <span class="xs dim">{{ cur.do }}</span>
       <div class="sp"></div>
-      {% if o.status == 'active' and me.role in ('manager','admin') %}
+      {% if o.status == 'active' and can_close %}
       <form method="post" action="/orders/{{ o.id }}/close" onsubmit="return confirm('确认结案？结案后不再出现在待办列表中。')">
         <button class="btn sm ghost" type="submit">结案</button>
+      </form>
+      {% elif o.status == 'closed' and can_close %}
+      <form method="post" action="/orders/{{ o.id }}/reopen" onsubmit="return confirm('确认重新打开该需求？')">
+        <button class="btn sm ghost" type="submit">重新打开</button>
       </form>
       {% endif %}
     </div>
@@ -78,7 +84,7 @@
     </table>
     {% if gate_miss %}
     {% set fillable = gate_miss | selectattr('k', 'in', ['color','cmf','custok','clientref','shrink','fit','po','podate','moldno','t0','t0ok','fin','finsam','asmok']) | list %}
-    {% if fillable %}
+    {% if fillable and can_fill %}
     <form method="post" action="/orders/{{ o.id }}/fill" class="gatefill" style="padding:0 16px 14px">
       <div class="xs dim" style="margin:11px 0 8px">图档类缺口请先到<a href="/docs">图档</a>页创建</div>
       <div class="grid g2" style="gap:10px">
@@ -325,7 +331,9 @@
 
   <div>
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>客户需求</h3></div>
+      <div class="hd"><h3>客户需求</h3><div class="sp"></div>
+        {% if can_base or can_tech %}<a class="hint" href="#editbase" onclick="document.getElementById('editbase').open=true;return false;">修改 ›</a>{% endif %}
+      </div>
       <div class="bd">
         <p style="margin:0;font-size:13px;line-height:1.75;white-space:pre-wrap">{{ o.requirements or '未填写客户需求' }}</p>
         <div class="hr"></div>
@@ -350,15 +358,64 @@
       </div>
     </div>
 
+    {% if can_base or can_tech %}
+    <details class="card" id="editbase" style="margin-bottom:16px">
+      <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">修改{{ '基本信息' if can_base else '技术参数' }}</summary>
+      <form method="post" action="/orders/{{ o.id }}/edit" style="padding:0 16px 16px;border-top:1px solid var(--line2)">
+        {% if can_base %}
+        <div class="row" style="margin-top:14px">
+          <div><label class="fl">客户</label>
+            <select name="customer_name">
+              <option value="">未指定</option>
+              {% for c in customers %}
+              <option value="{{ c }}" {{ 'selected' if c == o.customer_name else '' }}>{{ c }}</option>
+              {% endfor %}
+            </select></div>
+          <div><label class="fl">产品 / 项目名</label><input type="text" name="product_name" value="{{ o.product_name }}" required></div>
+          <div><label class="fl">交期{% if not can_due %}（需主管改）{% endif %}</label>
+            <input type="date" name="due_date" value="{{ o.due_date or '' }}" {{ '' if can_due else 'disabled' }}></div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div><label class="fl">客户料号 / 图号</label><input type="text" name="customer_part_no" value="{{ o.customer_part_no or '' }}"></div>
+        </div>
+        {% endif %}
+        {% if can_tech %}
+        <div class="row" style="margin-top:10px">
+          <div><label class="fl">做色 / 表面处理要求</label><input type="text" name="color_req" value="{{ o.color_req or '' }}"></div>
+          <div><label class="fl">色板 / 色号</label><input type="text" name="color_std" value="{{ o.color_std or '' }}" placeholder="PANTONE 419C"></div>
+        </div>
+        {% endif %}
+        {% if can_base %}
+        <div class="field" style="margin-top:10px">
+          <label class="fl">客户需求</label>
+          <textarea name="requirements" rows="4">{{ o.requirements or '' }}</textarea>
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label class="fl">备注</label>
+          <input type="text" name="note" value="{{ o.note or '' }}">
+        </div>
+        {% endif %}
+        <div class="flexr" style="gap:8px">
+          <button class="btn primary" type="submit">保存修改</button>
+          <button class="btn" type="button" onclick="document.getElementById('editbase').open=false">取消</button>
+          <span class="xs dim">改动会记入操作记录</span>
+        </div>
+      </form>
+    </details>
+    {% endif %}
+
     <div class="card" style="margin-bottom:16px">
       <div class="hd">
         <h3>客户资料</h3>
         <div class="sp"></div>
+        {% if can_files %}
         <button class="btn sm ghost" type="button"
                 onclick="document.getElementById('addfile').open=!document.getElementById('addfile').open">
           {{ '收起' if ofiles else '＋ 上传' }}</button>
+        {% endif %}
       </div>
       <div class="bd">
+        {% if can_files %}
         <details id="addfile" {{ 'open' if not ofiles else '' }}>
           <summary style="list-style:none;cursor:pointer;font-size:12.5px;color:var(--muted)">
             客户发来的 3D / 2D / 样板照片等原始资料，留档备查
@@ -374,6 +431,8 @@
             <button class="btn primary sm" type="submit" style="margin-top:10px">上传</button>
           </form>
         </details>
+        {% endif %}
+        {% if not ofiles and not can_files %}<div class="xs dim">暂无客户资料</div>{% endif %}
         {% if ofiles %}
         <div style="margin-top:10px">
           {% for f in ofiles %}
@@ -385,7 +444,7 @@
                 {%- if f.size %} · {{ '%.0f'|format(f.size / 1024) }} KB{% endif %}
                 {%- if f.note %} · {{ f.note }}{% endif %}</div>
             </div>
-            {% if me.role in ('manager','admin') or me.id == f.uploaded_by %}
+            {% if can_files %}
             <form method="post" action="/orders/{{ o.id }}/files/{{ f.id }}/del"
                   onsubmit="return confirm('确认删除「{{ f.file_name }}」？')">
               <button class="btn sm ghost" type="submit">删除</button>

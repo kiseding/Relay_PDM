@@ -26,9 +26,13 @@
               <td class="xs">{{ ROLE_NAMES.get(u.role, u.role) }}</td>
               <td>{% if u.active %}<span class="pill p-published">启用</span>{% else %}<span class="pill p-obsolete">停用</span>{% endif %}</td>
               {% if can_admin %}
-              <td>
+              <td class="nowrap">
+                <button class="btn sm ghost" type="button" title="修改账号"
+                  data-u='{{ {"id": u.id, "username": u.username, "name": u.name,
+                              "dept": u.dept, "role": u.role}|tojson }}'
+                  onclick="openUserEdit(this)">改</button>
                 {% if u.username != 'admin' %}
-                <form method="post" action="/settings/users/{{ u.id }}/toggle">
+                <form method="post" action="/settings/users/{{ u.id }}/toggle" style="display:inline">
                   <button class="btn sm ghost" type="submit">{{ '停用' if u.active else '启用' }}</button>
                 </form>
                 {% endif %}
@@ -109,4 +113,43 @@
     {% endif %}
   </div>
 </div>
+
+{% if can_admin %}
+<dialog class="dlg" id="useredit">
+  <form method="post" id="usereditform">
+    <div class="dlg-hd"><h3>修改账号 <span class="mono xs dim" id="ue_uname"></span></h3>
+      <button class="btn sm ghost" type="button" onclick="document.getElementById('useredit').close()">×</button></div>
+    <div class="dlg-bd">
+      <div class="row">
+        <div><label class="fl">姓名</label><input type="text" name="name" id="ue_name"></div>
+        <div><label class="fl">部门</label>
+          <select name="dept" id="ue_dept">{% for k, v in DEPTS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+        <div><label class="fl">角色</label>
+          <select name="role" id="ue_role">
+            {% for k, v in ROLE_NAMES.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+          </select></div>
+      </div>
+      <div class="field" style="margin-top:10px">
+        <label class="fl">重置密码</label>
+        <input type="text" name="password" placeholder="留空则不修改，至少 6 位">
+      </div>
+    </div>
+    <div class="dlg-ft">
+      <button class="btn" type="button" onclick="document.getElementById('useredit').close()">取消</button>
+      <button class="btn primary" type="submit">保存</button>
+    </div>
+  </form>
+</dialog>
+<script>
+function openUserEdit(btn) {
+  const d = JSON.parse(btn.dataset.u);
+  document.getElementById('usereditform').action = '/settings/users/' + d.id + '/edit';
+  document.getElementById('ue_uname').textContent = d.username;
+  document.getElementById('ue_name').value = d.name;
+  document.getElementById('ue_dept').value = d.dept;
+  document.getElementById('ue_role').value = d.role;
+  document.getElementById('useredit').showModal();
+}
+</script>
+{% endif %}
 {% endblock %}

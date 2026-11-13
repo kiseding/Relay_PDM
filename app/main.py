@@ -433,9 +433,11 @@ async def order_files_add(request: Request, oid: int, files: list[UploadFile] = 
     me = current_user(request)
     conn = db.connect()
     try:
-        o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
+        o = dict(conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone() or {})
         if not o:
             return go("/orders", err="未找到该需求")
+        if not db.can(me, "order.files", o):
+            return go(f"/orders/{oid}", err=db.can_edit_note(me, "order.files", o))
         ts, names = db.now_str(), []
         for f in files:
             if not f or not f.filename:
@@ -471,6 +473,9 @@ def order_file_del(request: Request, oid: int, fid: int):
         r = conn.execute("SELECT * FROM order_files WHERE id=? AND order_id=?", (fid, oid)).fetchone()
         if not r:
             return go(f"/orders/{oid}", err="文件不存在")
+        o = dict(conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone() or {})
+        if not db.can(me, "order.files", o):
+            return go(f"/orders/{oid}", err=db.can_edit_note(me, "order.files", o))
         conn.execute("DELETE FROM order_files WHERE id=?", (fid,))
         p = FILES_DIR / r["stored_name"]
         if p.exists():
@@ -641,6 +646,8 @@ def order_detail(request: Request, oid: int):
                WHERE r.order_id=? ORDER BY r.id DESC""", (oid,)).fetchall()]
         ofiles = [dict(r) for r in conn.execute(
             "SELECT * FROM order_files WHERE order_id=? ORDER BY id DESC", (oid,)).fetchall()]
+        customers = [r["name"] for r in conn.execute(
+            "SELECT name FROM customers ORDER BY name").fetchall()]
         can_submit = (cur["dept"] == me["dept"] or me["role"] in ("manager", "admin")) and \
             o["status"] == "active" and cur["no"] < db.LAST_STAGE and \
             not any(h["status"] in ("pending", "approved") for h in handovers)
@@ -648,7 +655,95 @@ def order_detail(request: Request, oid: int):
                       changes=changes, bom=bom, logs=logs, cur=cur, can_submit=can_submit,
                       steps=steps, lamps=lamps, gate=gate, gate_miss=gate_miss, rps=rps,
                       src_info=db.order_source(o.get("source")), SOURCES=db.ORDER_SOURCES,
-                      ofiles=ofiles)
+                      ofiles=ofiles, customers=customers,
+                      can_base=db.can(me, "order.base", o),
+                      can_tech=db.can(me, "order.tech", o),
+                      can_due=db.can(me, "order.due", o),
+                      can_fill=db.can(me, "order.tech", o) or db.can(me, "order.base", o),
+                      can_src=db.can(me, "order.source", o),
+                      can_files=db.can(me, "order.files", o),
+                      can_close=db.can(me, "order.close", o),
+                      no_base=db.can_edit_note(me, "order.base", o))
+    finally:
+        conn.close()
+
+
+@app.post("/orders/{oid}/edit")
+def order_edit(request: Request, oid: int,
+               customer_name: str = Form(""), product_name: str = Form(""),
+               due_date: str | None = Form(None), requirements: str = Form(""),
+               customer_part_no: str = Form(""), color_req: str = Form(""),
+               color_std: str = Form(""), note: str = Form("")):
+    """修改需求基本信息。录错了要能改，但按角色分级，且逐字段留痕。
+
+    交期单独按「主管及以上」管，其余基础信息历来单人 / 主管可改。
+    """
+    me = current_user(request)
+    conn = db.connect()
+    try:
+        o = dict(conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone() or {})
+        if not o:
+            return go("/orders", err="未找到该需求")
+
+        # 权限：基础信息看「建单人/主管」，技术参数看「技术部门/主管」，两类分开判
+        can_base = db.can(me, "order.base", o)
+        can_tech = db.can(me, "order.tech", o)
+        if not (can_base or can_tech):
+            return go(f"/orders/{oid}", err=db.can_edit_note(me, "order.base", o))
+
+        new = {}
+        if can_base:
+            new.update({
+                "customer_name": customer_name.strip(),
+                "product_name": product_name.strip(),
+                "requirements": requirements,
+                "customer_part_no": customer_part_no.strip(),
+                "note": note,
+            })
+            # 交期框在无权限时是 disabled（不随表单提交），拿不到就说明本次没打算改
+            if due_date is not None:
+                new["due_date"] = due_date.strip()
+        # 做色要求与色号属技术参数，提交为空时不动原值
+        if can_tech:
+            if color_req.strip():
+                new["color_req"] = color_req.strip()
+            if color_std.strip():
+                new["color_std"] = color_std.strip()
+        if not new:
+            return go(f"/orders/{oid}", err="当前账号只能改做色要求与色号")
+        if "product_name" in new and not new["product_name"]:
+            return go(f"/orders/{oid}", err="产品名称不能为空")
+
+        # 交期是排产依据，单独收紧一级
+        if "due_date" in new and (new["due_date"] or "") != (o.get("due_date") or ""):
+            if not db.can(me, "order.due", o):
+                return go(f"/orders/{oid}", err="交期变更需主管或管理员操作")
+
+        puts, vals, diff = [], [], []
+        for k, v in new.items():
+            old = (o.get(k) or "") if isinstance(o.get(k), str) else o.get(k)
+            if (v or "") != (old or ""):
+                puts.append(f"{k}=?")
+                vals.append(v)
+                label = {"customer_name": "客户", "product_name": "产品名", "due_date": "交期",
+                         "requirements": "需求说明", "customer_part_no": "客户料号",
+                         "color_req": "做色要求", "color_std": "色号", "note": "备注"}[k]
+                diff.append(f"{label}: {(old or '空')[:20]} → {(v or '空')[:20]}")
+        if not puts:
+            return go(f"/orders/{oid}", err="内容没有变化")
+
+        puts.append("updated_at=?")
+        vals.extend([db.now_str(), oid])
+        conn.execute(f"UPDATE orders SET {', '.join(puts)} WHERE id=?", vals)
+
+        # 客户改名时同步客户库
+        if new.get("customer_name") and new["customer_name"] != (o.get("customer_name") or ""):
+            conn.execute("INSERT OR IGNORE INTO customers(name,created_at) VALUES(?,?)",
+                         (new["customer_name"], db.now_str()))
+
+        log(conn, me, "修改需求", "order", oid, oid, "；".join(diff))
+        conn.commit()
+        return go(f"/orders/{oid}", ok="已保存")
     finally:
         conn.close()
 
@@ -662,14 +757,21 @@ def order_fill(request: Request, oid: int,
                po_no: str = Form(""), po_date: str = Form(""),
                mold_no_done: str = Form(""), t0_done: str = Form(""),
                client_ref_done: str = Form(""), shrink_ok: str = Form(""),
-               fit_ok: str = Form(""), assy_ok: str = Form("")):
-    """补录齐套清单里缺的项。空的输入不覆盖已有值。"""
+               fit_ok: str = Form(""), assy_ok: str = Form(""),
+               unset: str = Form("")):
+    """补录齐套清单里缺的项。空的输入不覆盖已有值。
+
+    unset 里放要取消勾选的字段名（逗号分隔）——勾错了要能撤回。
+    """
     me = current_user(request)
     conn = db.connect()
     try:
-        o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
+        o = dict(conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone() or {})
         if not o:
             return go("/orders", err="未找到该需求")
+        if not (db.can(me, "order.tech", o) or db.can(me, "order.base", o)
+                or me["role"] in ("manager", "admin")):
+            return go(f"/orders/{oid}", err=db.can_edit_note(me, "order.tech", o))
         sets, args, touched = [], [], []
         for k, v in [("color_req", color_req), ("customer_part_no", customer_part_no),
                      ("customer_ok_at", customer_ok_at), ("customer_ok_note", customer_ok_note),
@@ -680,18 +782,28 @@ def order_fill(request: Request, oid: int,
                 sets.append(f"{k}=?")
                 args.append(v.strip())
                 touched.append(k)
-        for k, v in [("mold_no_done", mold_no_done), ("t0_done", t0_done),
-                     ("client_ref_done", client_ref_done), ("shrink_ok", shrink_ok),
-                     ("fit_ok", fit_ok), ("assy_ok", assy_ok)]:
+        flag_fields = [("mold_no_done", mold_no_done), ("t0_done", t0_done),
+                       ("client_ref_done", client_ref_done), ("shrink_ok", shrink_ok),
+                       ("fit_ok", fit_ok), ("assy_ok", assy_ok)]
+        unchecked = {x for x in (unset or "").split(",") if x}
+        allowed = {k for k, _ in flag_fields}
+        for k, v in flag_fields:
             if v == "on":
                 sets.append(f"{k}=1")
                 touched.append(k)
+        # 显式要求取消的，置 0（勾错撤销）
+        for k in (unchecked & allowed):
+            sets.append(f"{k}=0")
+            touched.append(f"-{k}")
         if not sets:
             return go(f"/orders/{oid}", err="没有需要更新的内容")
         sets.append("updated_at=?")
         args.extend([db.now_str(), oid])
         conn.execute(f"UPDATE orders SET {', '.join(sets)} WHERE id=?", args)
-        log(conn, me, "补录信息", "order", oid, oid, "、".join(touched))
+        log(conn, me, "补录信息", "order", oid, oid,
+            "、".join(("取消 " if x.startswith("-") else "")
+                     + db.ORDER_FIELD_LABELS.get(x.lstrip("-"), x.lstrip("-"))
+                     for x in touched))
         conn.commit()
         return go(f"/orders/{oid}", ok="已保存")
     finally:
@@ -705,9 +817,11 @@ def order_source_set(request: Request, oid: int, source: str = Form(...)):
         return go(f"/orders/{oid}", err="来源不合法")
     conn = db.connect()
     try:
-        o = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
+        o = dict(conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone() or {})
         if not o:
             return go("/orders", err="未找到该需求")
+        if not db.can(me, "order.source", o):
+            return go(f"/orders/{oid}", err=db.can_edit_note(me, "order.source", o))
         conn.execute("UPDATE orders SET source=?, updated_at=? WHERE id=?",
                      (source, db.now_str(), oid))
         log(conn, me, "改来源", "order", oid, oid,
@@ -723,10 +837,34 @@ def order_close(request: Request, oid: int):
     me = current_user(request)
     conn = db.connect()
     try:
+        o = dict(conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone() or {})
+        if not o:
+            return go("/orders", err="未找到该需求")
+        if not db.can(me, "order.close", o):
+            return go(f"/orders/{oid}", err=db.can_edit_note(me, "order.close", o))
         conn.execute("UPDATE orders SET status='closed', updated_at=? WHERE id=?", (db.now_str(), oid))
         log(conn, me, "结案", "order", oid, oid, "需求结案")
         conn.commit()
         return go(f"/orders/{oid}", ok="需求已结案")
+    finally:
+        conn.close()
+
+
+@app.post("/orders/{oid}/reopen")
+def order_reopen(request: Request, oid: int):
+    """误结案后重开。管理员与主管可用。"""
+    me = current_user(request)
+    conn = db.connect()
+    try:
+        o = dict(conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone() or {})
+        if not o:
+            return go("/orders", err="未找到该需求")
+        if not db.can(me, "order.close", o):
+            return go(f"/orders/{oid}", err=db.can_edit_note(me, "order.close", o))
+        conn.execute("UPDATE orders SET status='active', updated_at=? WHERE id=?", (db.now_str(), oid))
+        log(conn, me, "重开需求", "order", oid, oid, "由已结案恢复为进行中")
+        conn.commit()
+        return go(f"/orders/{oid}", ok="需求已重开")
     finally:
         conn.close()
 
@@ -801,7 +939,9 @@ def doc_detail(request: Request, did: int):
             "SELECT h.code, h.id, h.status, h.received_at FROM handover_items i "
             "JOIN handovers h ON h.id=i.handover_id WHERE i.document_id=? ORDER BY h.id DESC", (did,)).fetchall()]
         return render(request, "doc_detail.html", d=d, o=dict(o) if o else None, vers=vers,
-                      changes=changes, in_ho=in_ho)
+                      changes=changes, in_ho=in_ho,
+                      can_meta=db.can(me, "doc.meta"),
+                      no_meta=db.can_edit_note(me, "doc.meta"))
     finally:
         conn.close()
 
@@ -815,8 +955,8 @@ def doc_update(request: Request, did: int, mold_no: str = Form(""), aliases: str
         d = conn.execute("SELECT * FROM documents WHERE id=?", (did,)).fetchone()
         if not d:
             return go("/docs", err="找不到这张图档")
-        if me["dept"] != "engineering" and me["role"] not in ("manager", "admin"):
-            return go(f"/docs/{did}", err="开模编号由工程部维护，当前账号无修改权限")
+        if not db.can(me, "doc.meta"):
+            return go(f"/docs/{did}", err=db.can_edit_note(me, "doc.meta"))
         conn.execute(
             "UPDATE documents SET mold_no=?, aliases=?, title=?, doc_type=?, note=?, updated_at=? WHERE id=?",
             (mold_no.strip(), aliases, title or d["title"], doc_type or d["doc_type"], note,
@@ -1174,6 +1314,8 @@ def rp_status(request: Request, rid: int, status: str = Form(...)):
         r = conn.execute("SELECT * FROM rp_requests WHERE id=?", (rid,)).fetchone()
         if not r:
             return go("/rp", err="未找到该打样单")
+        if not db.can(me, "rp.edit"):
+            return go("/rp", err=db.can_edit_note(me, "rp.edit"))
         if status not in db.RP_STATUS:
             return go("/rp", err="状态不合法")
         ts = db.now_str()
@@ -1229,7 +1371,7 @@ def bom_page(request: Request, oid: int):
         lamps = {"ok": sum(1 for r in rows if r["lamp"] == "ok"),
                  "warn": sum(1 for r in rows if r["lamp"] == "warn"),
                  "bad": sum(1 for r in rows if r["lamp"] == "bad")}
-        can_edit = me["dept"] == "engineering" or me["role"] in ("manager", "admin")
+        can_edit = db.can(me, "bom.edit", o)
         return render(request, "bom.html", o=o, rows=rows, docs=docs, snaps=snaps,
                       lamps=lamps, can_edit=can_edit)
     finally:
@@ -1244,7 +1386,7 @@ def bom_add(request: Request, oid: int, part_name: str = Form(...), part_no: str
     me = current_user(request)
     conn = db.connect()
     try:
-        if me["dept"] != "engineering" and me["role"] not in ("manager", "admin"):
+        if not db.can(me, "bom.edit"):
             return go(f"/bom/{oid}", err="BOM 由工程部维护，当前账号为只读权限")
         ts = db.now_str()
         seq = (conn.execute("SELECT MAX(seq) m FROM bom_items WHERE order_id=?", (oid,)).fetchone()["m"] or 0) + 1
@@ -1262,12 +1404,70 @@ def bom_add(request: Request, oid: int, part_name: str = Form(...), part_no: str
         conn.close()
 
 
+@app.post("/bom/{oid}/edit")
+def bom_edit(request: Request, oid: int, item_id: int = Form(...),
+             part_no: str = Form(""), part_name: str = Form(""), spec: str = Form(""),
+             qty: float = Form(1), unit: str = Form("件"), source: str = Form("自制"),
+             parent_id: str = Form(""), document_id: str = Form(""), note: str = Form("")):
+    """修改已有 BOM 行。数输错了、挂错图档，都要能改回来。"""
+    me = current_user(request)
+    conn = db.connect()
+    try:
+        if not db.can(me, "bom.edit"):
+            return go(f"/bom/{oid}", err="BOM 归工程部维护，你只能看")
+        it = conn.execute("SELECT * FROM bom_items WHERE id=? AND order_id=?",
+                          (item_id, oid)).fetchone()
+        if not it:
+            return go(f"/bom/{oid}", err="该零件记录已不存在")
+        if not part_name.strip():
+            return go(f"/bom/{oid}", err="零件名称不能为空")
+        pid = int(parent_id) if parent_id else None
+        if pid == item_id:
+            return go(f"/bom/{oid}", err="上级不能是自己")
+        # 防环：新上级不能是自己的子孙
+        def descendants(x):
+            out = set()
+            stack = [x]
+            while stack:
+                cur = stack.pop()
+                for r in conn.execute("SELECT id FROM bom_items WHERE parent_id=?", (cur,)):
+                    if r["id"] not in out:
+                        out.add(r["id"])
+                        stack.append(r["id"])
+            return out
+        if pid and pid in descendants(item_id):
+            return go(f"/bom/{oid}", err="上级不能是自己的下级件")
+
+        diff = []
+        for k, v in [("part_no", part_no.strip()), ("part_name", part_name.strip()),
+                     ("spec", spec), ("qty", qty), ("unit", unit), ("source", source),
+                     ("parent_id", pid), ("document_id", int(document_id) if document_id else None),
+                     ("note", note)]:
+            if it[k] != v:
+                label = db.BOM_FIELD_LABELS.get(k, k)
+                diff.append(f"{label}: {it[k] if it[k] not in (None, '') else '空'} → {v if v not in (None, '') else '空'}")
+        if not diff:
+            return go(f"/bom/{oid}", err="内容没有变化")
+        conn.execute(
+            """UPDATE bom_items SET part_no=?, part_name=?, spec=?, qty=?, unit=?, source=?,
+                                    parent_id=?, document_id=?, note=?, updated_by_name=?, updated_at=?
+               WHERE id=?""",
+            (part_no.strip(), part_name.strip(), spec, qty, unit, source, pid,
+             int(document_id) if document_id else None, note, me["name"], db.now_str(), item_id))
+        conn.execute("UPDATE orders SET bom_rev=bom_rev+1, updated_at=? WHERE id=?", (db.now_str(), oid))
+        log(conn, me, "改 BOM", "order", oid, oid, f"修改零件 {it['part_no']} {it['part_name']}：{'；'.join(diff)}")
+        conn.commit()
+        return go(f"/bom/{oid}", ok="已保存")
+    finally:
+        conn.close()
+
+
 @app.post("/bom/{oid}/delete")
 def bom_delete(request: Request, oid: int, item_id: int = Form(...)):
     me = current_user(request)
     conn = db.connect()
     try:
-        if me["dept"] != "engineering" and me["role"] not in ("manager", "admin"):
+        if not db.can(me, "bom.edit"):
             return go(f"/bom/{oid}", err="BOM 归工程部维护，你只能看")
         it = conn.execute("SELECT * FROM bom_items WHERE id=?", (item_id,)).fetchone()
         if not it:
@@ -1445,6 +1645,51 @@ def user_new(request: Request, username: str = Form(...), name: str = Form(...),
         log(conn, me, "加账号", "user", 0, None, f"{name}（{db.dept_name(dept)}）")
         conn.commit()
         return go("/settings", ok="账号已创建")
+    finally:
+        conn.close()
+
+
+@app.post("/settings/users/{uid}/edit")
+def user_edit(request: Request, uid: int, name: str = Form(""), dept: str = Form(""),
+              role: str = Form(""), password: str = Form("")):
+    """调整账号姓名 / 部门 / 角色 / 密码。仅管理员。"""
+    me = current_user(request)
+    if me["role"] != "admin":
+        return go("/settings", err="仅管理员可修改账号")
+    conn = db.connect()
+    try:
+        u = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        if not u:
+            return go("/settings", err="账号不存在")
+        sets, args, diff = [], [], []
+        if name.strip() and name.strip() != u["name"]:
+            sets.append("name=?"); args.append(name.strip())
+            diff.append(f"姓名 {u['name']}→{name.strip()}")
+        if dept and dept != u["dept"]:
+            if dept not in db.DEPTS:
+                return go("/settings", err="部门不合法")
+            sets.append("dept=?"); args.append(dept)
+            diff.append(f"部门 {db.dept_name(u['dept'])}→{db.dept_name(dept)}")
+        if role and role != u["role"]:
+            if role not in db.ROLE_NAMES:
+                return go("/settings", err="角色不合法")
+            if u["username"] == "admin" and role != "admin":
+                return go("/settings", err="内置管理员账号不能降级")
+            sets.append("role=?"); args.append(role)
+            diff.append(f"角色 {db.ROLE_NAMES.get(u['role'])}→{db.ROLE_NAMES.get(role)}")
+        if password.strip():
+            if len(password.strip()) < 6:
+                return go("/settings", err="密码至少 6 位")
+            sets.append("pwd_hash=?"); args.append(db.hash_pwd(password.strip()))
+            diff.append("重置密码")
+        if not sets:
+            return go("/settings", err="内容没有变化")
+        sets.append("updated_at=?")
+        args.extend([db.now_str(), uid])
+        conn.execute(f"UPDATE users SET {', '.join(sets)} WHERE id=?", args)
+        log(conn, me, "改账号", "user", 0, None, f"{u['username']}：{'；'.join(diff)}")
+        conn.commit()
+        return go("/settings", ok="账号已更新")
     finally:
         conn.close()
 
