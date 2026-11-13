@@ -339,7 +339,7 @@ details[open] summary{margin-bottom:10px}
 .gate-state.ok{background:var(--greenbg); color:var(--green); border:1px solid var(--greenline)}
 .card.gate.blocked{box-shadow:inset 3px 0 0 var(--amber)}
 .card.gate.pass{box-shadow:inset 3px 0 0 var(--green)}
-.gatefill{border-top:1px dashed var(--line); margin-top:4px}
+.gatefill{border-top:1px dashed var(--line); margin-top:0}
 dl.kv{margin:0; display:grid; grid-template-columns:78px 1fr; gap:5px 10px; font-size:12.5px}
 dl.kv dt{color:var(--faint); font-size:12px}
 dl.kv dd{margin:0; color:var(--ink2); line-height:1.5}

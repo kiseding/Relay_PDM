@@ -10,7 +10,7 @@
       {% if o.status == 'closed' %}<span class="tag" style="margin-left:6px">已结案</span>{% endif %}</div>
   </div>
   <div class="sp"></div>
-  <a class="btn" href="/bom/{{ o.id }}">查看 BOM（{{ bom|length }} 行）</a>
+  <a class="btn" href="/bom/{{ o.id }}">BOM（{{ bom|length }} 行）</a>
   {% if can_submit %}
   <button class="btn primary" onclick="document.getElementById('submitbox').open=true">提交交接单</button>
   {% endif %}
@@ -44,24 +44,24 @@
 {% if gate %}
 <div class="card gate {{ 'blocked' if gate_miss else 'pass' }}" style="margin-bottom:16px">
   <div class="hd">
-    <h3>本环节齐套检查</h3>
+    <h3>齐套检查</h3>
     <span class="tag dept-{{ cur.dept }}">{{ cur.name }}</span>
     <div class="sp"></div>
     {% if gate_miss %}
-      <span class="gate-state bad">缺 {{ gate_miss|length }} 项，不能转出</span>
+      <span class="gate-state bad">缺 {{ gate_miss|length }} 项</span>
     {% else %}
-      <span class="gate-state ok">已齐套，可提交交接</span>
+      <span class="gate-state ok">已齐套</span>
     {% endif %}
   </div>
   <div class="bd tight">
     <table>
-      <thead><tr><th style="width:26px"></th><th style="width:190px">必须项</th><th>为什么要这一项</th></tr></thead>
+      <thead><tr><th style="width:26px"></th><th style="width:176px">必须项</th><th>说明</th></tr></thead>
       <tbody>
       {% for g in gate %}
         <tr>
           <td>{% if g.ok %}<span class="lamp ok"></span>{% else %}<span class="lamp warn"></span>{% endif %}</td>
-          <td class="sm"><b>{{ g.label }}</b>{% if not g.ok %}<span class="xs" style="color:#b45309"> · 待补</span>{% endif %}</td>
-          <td class="xs dim">{{ g.why }}{% if g.detail %}（{{ g.detail }}）{% endif %}</td>
+          <td class="sm"><b>{{ g.label }}</b>{% if not g.ok %}<span class="tag" style="margin-left:6px;color:#b45309;border-color:var(--amberline);background:var(--amberbg)">待补</span>{% endif %}</td>
+          <td class="xs dim">{{ g.why }}{% if g.detail %}｜{{ g.detail }}{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -69,8 +69,8 @@
     {% if gate_miss %}
     {% set fillable = gate_miss | selectattr('k', 'in', ['color','custok','po','podate','moldno','t0']) | list %}
     {% if fillable %}
-    <form method="post" action="/orders/{{ o.id }}/fill" class="gatefill">
-      <div class="xs dim" style="margin:10px 0 8px">在此补齐可现场填写的项目；图档类缺口请先到<a href="/docs">图档</a>页创建对应类型。</div>
+    <form method="post" action="/orders/{{ o.id }}/fill" class="gatefill" style="padding:0 16px 14px">
+      <div class="xs dim" style="margin:11px 0 8px">图档类缺口请先到<a href="/docs">图档</a>页创建</div>
       <div class="grid g2" style="gap:10px">
         {% for g in fillable %}
           {% if g.k == 'color' %}
@@ -107,8 +107,8 @@
       <button class="btn primary sm" type="submit" style="margin-top:12px">保存补齐项</button>
     </form>
     {% else %}
-    <div class="gatefill" style="padding:10px 0 2px">
-      <span class="xs dim">缺口全部为图档：请到<a href="/docs">图档</a>页新建对应类型的图档并上传版本，再回来提交。</span>
+    <div class="gatefill" style="padding:11px 16px 13px">
+      <span class="xs dim">缺口均为图档：到<a href="/docs">图档</a>页新建并上传版本后再提交。</span>
     </div>
     {% endif %}
     {% endif %}
@@ -120,7 +120,6 @@
 <details class="card" id="submitbox" style="margin-bottom:16px" {{ 'open' if not docs }}>
   <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">
     提交交接单：{{ cur.name }} → {{ stage(cur.no + 1).name if cur.no < 7 else '（已是最后一环）' }}
-    <span class="xs dim" style="font-weight:400"> · 勾选本次提交的版本，经主管审批后转为正式发布</span>
   </summary>
   <form method="post" action="/handovers/new" style="padding:14px 16px 18px;border-top:1px solid var(--line2)">
     <input type="hidden" name="order_id" value="{{ o.id }}">
@@ -161,12 +160,10 @@
     {% endif %}
 
     <div class="field" style="margin-top:10px">
-      <label class="fl">本环节完成情况说明 *</label>
+      <label class="fl">本环节完成情况 *</label>
       <textarea name="note" required placeholder="例：结构 3D 已完成，分模按 1 出 2，卡扣壁厚改为 1.2mm；镶件位置待模具部确认。"></textarea>
-      <div class="hintline">该说明将作为下一环节的交接依据并留档，请写明具体完成内容。</div>
     </div>
     <button class="btn primary" type="submit">提交审批</button>
-    <span class="xs dim" style="margin-left:8px">审批通过并由下一环节签收后，订单进入下一环节</span>
   </form>
 </details>
 {% endif %}
@@ -174,8 +171,7 @@
 <div class="grid g21">
   <div>
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>交接记录</h3><div class="sp"></div>
-        <span class="hint">每次流转均需主管审批与下一环节签收</span></div>
+      <div class="hd"><h3>交接记录</h3><div class="sp"></div></div>
       <div class="bd tight">
         <table>
           <thead><tr><th style="width:82px">单号</th><th>流转</th><th style="width:96px">状态</th>
@@ -202,8 +198,7 @@
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>本订单图档</h3><div class="sp"></div>
-        <span class="hint">同时显示设计编号、开模编号与客户料号</span></div>
+      <div class="hd"><h3>图档</h3><div class="sp"></div></div>
       <div class="bd tight">
         <table>
           <thead><tr><th>图档</th><th style="width:160px">编号</th><th style="width:112px">当前版本</th>
@@ -221,7 +216,7 @@
                 {% if d.ver %}
                   <span class="mono" style="color:var(--teal);font-weight:700;font-size:14px">v{{ d.ver.version_no }}</span>
                   <span class="pill p-{{ d.ver.status }}">{{ VER_STATUS.get(d.ver.status) }}</span>
-                {% else %}<span class="tag">暂无正式版</span>{% endif %}
+                {% else %}<span class="tag">无正式版</span>{% endif %}
                 <div class="xs dim">{{ d.n_ver }} 个版本</div>
               </td>
               <td>
@@ -263,8 +258,7 @@
 
     <div class="card" style="margin-bottom:16px">
       <div class="hd"><h3>打样单</h3><div class="sp"></div>
-        <span class="hint">按具体版本打样，做色要求必填</span>
-        <a class="btn sm" href="/rp" style="margin-left:8px">去开单</a></div>
+        <a class="btn sm" href="/rp">开单</a></div>
       <div class="bd tight">
         <table>
           <thead><tr><th style="width:96px">单号</th><th>打样目的</th>
@@ -290,7 +284,7 @@
     <div class="card" style="margin-bottom:16px">
       <div class="hd"><h3>客户需求</h3></div>
       <div class="bd">
-        <p style="margin:0;font-size:13px;line-height:1.75;white-space:pre-wrap">{{ o.requirements or '业务部未填写需求说明。' }}</p>
+        <p style="margin:0;font-size:13px;line-height:1.75;white-space:pre-wrap">{{ o.requirements or '未填写客户需求' }}</p>
         <div class="hr"></div>
         <dl class="kv">
           <dt>做色要求</dt><dd>{{ o.color_req or '—' }}</dd>
@@ -326,7 +320,7 @@
         {% endfor %}
         {% if bom|length > 6 %}<div class="xs dim" style="margin-top:4px">…另有 {{ bom|length - 6 }} 行</div>{% endif %}
         {% else %}
-        <div class="xs dim">暂无 BOM，由工程部在「开模准备」环节建立。</div>
+        <div class="xs dim">暂无 BOM</div>
         {% endif %}
       </div>
     </div>

@@ -5,16 +5,14 @@
 
 <div class="page-head">
   <div>
-    <div class="t">账号与系统</div>
-    <div class="d">账号与角色在此维护，无需配置复杂权限矩阵。</div>
+    <div class="t">设置</div>
   </div>
 </div>
 
 <div class="grid g21">
   <div>
     <div class="card">
-      <div class="hd"><h3>账号（{{ users|length }}）</h3><div class="sp"></div>
-        <span class="hint">部门决定可推进的环节</span></div>
+      <div class="hd"><h3>账号（{{ users|length }}）</h3></div>
       <div class="bd tight">
         <table>
           <thead><tr><th style="width:96px">账号</th><th style="width:90px">姓名</th><th style="width:130px">部门</th>
@@ -48,7 +46,7 @@
       <div class="hd"><h3>新增账号</h3></div>
       <form method="post" action="/settings/users/new" class="bd">
         <div class="row">
-          <div><label class="fl">账号（英文或拼音）</label><input type="text" name="username" required placeholder="wang"></div>
+          <div><label class="fl">账号</label><input type="text" name="username" required placeholder="wang"></div>
           <div><label class="fl">姓名</label><input type="text" name="name" required placeholder="王工"></div>
           <div><label class="fl">初始密码</label><input type="text" name="password" value="123456"></div>
         </div>
@@ -57,9 +55,9 @@
             <select name="dept">{% for k, v in DEPTS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
           <div><label class="fl">角色</label>
             <select name="role">
-              <option value="staff">员工（仅可推进本部门环节）</option>
-              <option value="manager">主管（具备审批权限）</option>
-              <option value="admin">管理员（具备全部权限）</option>
+              <option value="staff">员工</option>
+              <option value="manager">主管</option>
+              <option value="admin">管理员</option>
             </select></div>
         </div>
         <button class="btn primary" style="margin-top:12px" type="submit">创建账号</button>
@@ -70,7 +68,7 @@
 
   <div>
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>系统数据概览</h3></div>
+      <div class="hd"><h3>数据概览</h3></div>
       <div class="bd">
         <div class="kv">
           <span class="k">订单</span><span class="v">{{ counts.orders }}</span>
@@ -81,8 +79,7 @@
         </div>
         <div class="hr"></div>
         <div class="xs dim">
-          数据存储于 <code>data/plm.db</code>，附件存储于 <code>data/files/</code>。<br>
-          备份时复制该目录即可，迁移时还原至相同路径。
+          数据 <code>data/plm.db</code> · 附件 <code>data/files/</code>
         </div>
       </div>
     </div>
@@ -97,7 +94,6 @@
           <span class="tag dept-{{ s.dept }}">{{ dept_name(s.dept) }}</span>
         </div>
         {% endfor %}
-        <div class="xs dim" style="margin-top:8px">环节定义位于 <code>app/db.py</code>，暂不提供图形化配置，以确保流程唯一可控。</div>
       </div>
     </div>
 
@@ -105,7 +101,7 @@
     <div class="card" style="border-color:var(--redline)">
       <div class="hd" style="background:var(--redbg);border-radius:11px 11px 0 0"><h3 style="color:var(--red)">重置数据</h3></div>
       <form method="post" action="/settings/reset" class="bd">
-        <div class="xs dim" style="margin-bottom:8px">清除全部订单、图档、交接单与 BOM，并重新导入演示数据，账号保留。</div>
+        <div class="xs dim" style="margin-bottom:8px">清除全部业务数据并重新导入演示数据，账号保留。</div>
         <input type="text" name="confirm" placeholder="输入 RESET 确认" style="margin-bottom:8px">
         <button class="btn danger" type="submit">重置为演示数据</button>
       </form>

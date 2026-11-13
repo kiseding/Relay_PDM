@@ -6,7 +6,6 @@
 <div class="page-head">
   <div>
     <div class="t">打样单</div>
-    <div class="d">按已发布的图档版本打样，做色要求必填；同一订单可多次开单，不占用七环节进度。</div>
   </div>
   <div class="sp"></div>
   <a class="btn sm {{ 'primary' if tab == 'open' }}" href="/rp?tab=open">在办</a>
@@ -17,7 +16,6 @@
 <details class="card" id="newrp" style="margin-bottom:16px">
   <summary style="padding:13px 16px;list-style:none;cursor:pointer;font-size:13.5px;font-weight:600">
     ＋ 开打样单
-    <span class="xs dim" style="font-weight:400"> · 必须写明依据哪一版图档、按什么颜色打</span>
   </summary>
   <form method="post" action="/rp/new" style="padding:14px 16px 16px;border-top:1px solid var(--line2)">
     <div class="row">
@@ -30,12 +28,13 @@
       <div><label class="fl">数量（只）</label>
         <input type="number" name="qty" value="1" min="1" style="width:100%"></div>
     </div>
-    <div class="field" style="margin-top:10px"><label class="fl">这次打样要确认什么 *</label>
-      <input type="text" name="purpose" required placeholder="例：确认卡扣下移后的装配手感，并看内侧条纹凸起 0.5 的效果"></div>
+    <div class="field" style="margin-top:10px"><label class="fl">本次打样目的 *</label>
+      <input type="text" name="purpose" required placeholder="例：确认卡扣下移后的装配手感">
+    </div>
     <div class="row" style="margin-top:10px">
       <div><label class="fl">做色要求 *</label>
         <input type="text" name="color_req" id="rp-color" required placeholder="例：砂黑手工喷漆哑光；另一只砂红">
-        <div class="hintline">缺做色要求打出来的样多半要重做，故设为必填。</div></div>
+      </div>
       <div><label class="fl">镜片规格</label>
         <input type="text" name="lens_spec" placeholder="例：1.6mm PC 平片，透光率 ≥88%"></div>
     </div>

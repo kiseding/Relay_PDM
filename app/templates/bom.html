@@ -18,18 +18,15 @@
 </div>
 
 <div class="grid g3" style="margin-bottom:16px">
-  <div class="stat"><div class="k"><span class="lamp ok"></span> 已对齐</div><div class="v">{{ lamps.ok }}</div>
-    <div class="f">图档已发布，或该零件无需图档</div></div>
-  <div class="stat warn"><div class="k"><span class="lamp warn"></span> 缺图</div><div class="v">{{ lamps.warn }}</div>
-    <div class="f">BOM 已登记但未关联图档</div></div>
-  <div class="stat"{% if lamps.bad %} style="border-color:var(--redline)"{% endif %}><div class="k"><span class="lamp bad"></span> 未发布</div><div class="v"{% if lamps.bad %} style="color:var(--red)"{% endif %}>{{ lamps.bad }}</div>
-    <div class="f">已关联图档，但当前版本为草稿或已作废</div></div>
+  <div class="stat"><div class="k"><span class="lamp ok"></span> 已对齐</div><div class="v">{{ lamps.ok }}</div></div>
+  <div class="stat warn"><div class="k"><span class="lamp warn"></span> 缺图</div><div class="v">{{ lamps.warn }}</div></div>
+  <div class="stat"{% if lamps.bad %} style="border-color:var(--redline)"{% endif %}><div class="k"><span class="lamp bad"></span> 未发布</div><div class="v"{% if lamps.bad %} style="color:var(--red)"{% endif %}>{{ lamps.bad }}</div></div>
 </div>
 
 {% if lamps.warn or lamps.bad %}
 <div class="toast err" style="background:var(--amberbg);border-color:var(--amberline);color:#92400e">
   <span>!</span>
-  <div>共 {{ lamps.warn + lamps.bad }} 行图档状态异常。提交交接单时将予以提示，但不会阻止提交。</div>
+  <div>{{ lamps.warn + lamps.bad }} 行图档状态异常，提交交接单时会提示</div>
 </div>
 {% endif %}
 
@@ -55,7 +52,7 @@
         <select name="unit">{% for u in BOM_UNITS %}<option>{{ u }}</option>{% endfor %}</select></div>
       <div style="flex:0 0 100px"><label class="fl">来源</label>
         <select name="source">{% for s in BOM_SOURCES %}<option>{{ s }}</option>{% endfor %}</select></div>
-      <div style="flex:1.4 1 200px"><label class="fl">关联图档（自制件必填）</label>
+      <div style="flex:1.4 1 200px"><label class="fl">关联图档</label>
         <select name="document_id">
           <option value="">— 不关联 —</option>
           {% for d in docs %}<option value="{{ d.id }}">{{ d.design_no }} {{ d.title }}</option>{% endfor %}
@@ -63,7 +60,6 @@
     </div>
     <div class="field" style="margin-top:10px"><label class="fl">备注</label><input type="text" name="note"></div>
     <button class="btn primary" type="submit">添加</button>
-    <span class="xs dim" style="margin-left:8px">层级结构：装配件 → 零件 → 标准件，最多三层</span>
   </form>
 </details>
 {% endif %}
@@ -109,8 +105,7 @@
         </tr>
       {% endfor %}
       {% if not rows %}
-        <tr><td colspan="8"><div class="empty"><div class="big">☰</div>暂无 BOM<br>
-          <span class="xs">由工程部在「开模准备」环节建立，先添加总成，再逐级添加零件。</span></div></td></tr>
+        <tr><td colspan="8"><div class="empty"><div class="big">☰</div>暂无 BOM</div></td></tr>
       {% endif %}
       </tbody>
     </table>
@@ -118,8 +113,7 @@
 </div>
 
 <div class="card">
-  <div class="hd"><h3>BOM 快照</h3><div class="sp"></div>
-    <span class="hint">交接时冻结当时 BOM 内容</span></div>
+  <div class="hd"><h3>BOM 快照</h3></div>
   <div class="bd tight">
     <table>
       <thead><tr><th style="width:90px">交接单</th><th style="width:74px">BOM 版本</th><th style="width:66px" class="mid">行数</th>

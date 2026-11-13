@@ -5,8 +5,7 @@
 
 <div class="page-head">
   <div>
-    <div class="t">{{ docs|length }} 张图档 · {{ ords|length }} 张订单</div>
-    <div class="d">支持按设计编号、开模编号、客户料号、图档名称与订单号检索。</div>
+    <div class="t">{{ docs|length + ords|length }} 条结果</div>
   </div>
 </div>
 
@@ -56,7 +55,7 @@
 
 {% if not docs and not ords %}
 <div class="card"><div class="empty"><div class="big">⌕</div>
-  {% if q %}未找到匹配结果，请确认该编号是否已录入系统。{% else %}请在顶部搜索框输入关键词{% endif %}
+  {% if q %}未找到匹配结果，请确认编号是否已录入。{% else %}请输入关键词{% endif %}
 </div></div>
 {% endif %}
 {% endblock %}

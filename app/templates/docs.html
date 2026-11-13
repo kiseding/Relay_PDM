@@ -5,8 +5,7 @@
 
 <div class="page-head">
   <div>
-    <div class="t">图档列表</div>
-    <div class="d">同一图档可关联多个编号，任一编号均可检索。</div>
+    <div class="t">图档</div>
   </div>
   <div class="sp"></div>
   <button class="btn primary" onclick="document.getElementById('newdoc').open=true">＋ 新建图档</button>
@@ -26,7 +25,7 @@
     <div class="row" style="margin-top:10px">
       <div><label class="fl">类型</label>
         <select name="doc_type">{% for t in DOC_TYPES %}<option>{{ t }}</option>{% endfor %}</select></div>
-      <div><label class="fl">开模编号（由工程部填写，可暂留空）</label><input type="text" name="mold_no" placeholder="M-2601-C"></div>
+      <div><label class="fl">开模编号</label><input type="text" name="mold_no" placeholder="M-2601-C"></div>
       <div><label class="fl">别名 / 客户料号</label><input type="text" name="aliases" placeholder="KL-8893, 卡扣件"></div>
     </div>
     <div class="field" style="margin-top:10px"><label class="fl">备注</label><input type="text" name="note"></div>
@@ -35,7 +34,7 @@
 </details>
 
 <div class="flexr" style="margin-bottom:12px;gap:6px;flex-wrap:wrap">
-  <a class="btn sm {{ 'primary' if not t }}" href="/docs?q={{ q }}">全部类型</a>
+  <a class="btn sm {{ 'primary' if not t }}" href="/docs?q={{ q }}">全部</a>
   {% for dt in DOC_TYPES %}
   <a class="btn sm {{ 'primary' if t == dt }}" href="/docs?q={{ q }}&t={{ dt }}">{{ dt }}</a>
   {% endfor %}
@@ -56,12 +55,12 @@
             <div class="xs dim">{{ d.doc_type }} · {{ d.order_code or '未挂单' }}</div></td>
           <td class="mono" style="font-size:12px">{{ d.design_no }}</td>
           <td class="mono" style="font-size:12px">
-            {% if d.mold_no %}{{ d.mold_no }}{% else %}<span class="dim">待工程部填写</span>{% endif %}</td>
+            {% if d.mold_no %}{{ d.mold_no }}{% else %}<span class="dim">—</span>{% endif %}</td>
           <td class="xs dim">{{ d.aliases or '—' }}</td>
           <td>
             {% if d.ver %}<span class="mono" style="color:var(--teal);font-weight:700;font-size:14px">v{{ d.ver.version_no }}</span>
               <span class="pill p-{{ d.ver.status }}">{{ VER_STATUS.get(d.ver.status) }}</span>
-            {% else %}<span class="tag">暂无正式版</span>{% endif %}
+            {% else %}<span class="tag">无正式版</span>{% endif %}
           </td>
           <td>{% if d.ver and d.ver.customer_confirmed %}
               <span class="tag" style="background:#faf5ff;color:#7e22ce;border-color:#e9d5ff">已确认</span>

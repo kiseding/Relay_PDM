@@ -43,8 +43,7 @@
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div class="hd"><h3>本次提交的图档（{{ items|length }}）</h3><div class="sp"></div>
-        <span class="hint">冻结提交时刻的版本</span></div>
+      <div class="hd"><h3>本次图档（{{ items|length }}）</h3><div class="sp"></div></div>
       <div class="bd tight">
         <table>
           <thead><tr><th>图档</th><th style="width:140px">设计编号</th><th style="width:100px">开模编号</th>
@@ -59,7 +58,7 @@
               <td><a class="btn sm" href="/files/{{ it.stored_name }}">下载</a></td>
             </tr>
           {% endfor %}
-          {% if not items %}<tr><td colspan="5"><div class="empty xs">本次交接未附图档</div></td></tr>{% endif %}
+          {% if not items %}<tr><td colspan="5"><div class="empty xs">未附图档</div></td></tr>{% endif %}
           </tbody>
         </table>
       </div>
@@ -67,8 +66,7 @@
 
     {% if bom %}
     <div class="card">
-      <div class="hd"><h3>BOM 快照（第 {{ bom_rev }} 版 · {{ bom|length }} 行）</h3><div class="sp"></div>
-        <span class="hint">只读，内容固定不变</span></div>
+      <div class="hd"><h3>BOM 快照（第 {{ bom_rev }} 版 · {{ bom|length }} 行）</h3><div class="sp"></div></div>
       <div class="bd tight">
         <table class="bomtree">
           <thead><tr><th class="no">#</th><th style="width:148px">零件号</th><th>名称</th>
@@ -97,13 +95,12 @@
     <div class="card" style="margin-bottom:16px;border-color:var(--amberline)">
       <div class="hd" style="background:var(--amberbg);border-radius:11px 11px 0 0"><h3 style="color:var(--amber)">待我审批</h3></div>
       <div class="bd">
-        <p class="xs dim" style="margin-top:0">审批通过后，单内版本转为「已发布」并成为图档当前版本，原版本自动作废。</p>
         <form method="post" action="/handovers/{{ h.id }}/approve" style="margin-bottom:10px">
           <input type="text" name="note" placeholder="审批意见（选填）" style="margin-bottom:8px">
           <button class="btn primary" style="width:100%" type="submit">通过</button>
         </form>
         <form method="post" action="/handovers/{{ h.id }}/reject">
-          <input type="text" name="note" placeholder="退回原因（请写明，避免反复退回）" style="margin-bottom:8px">
+          <input type="text" name="note" placeholder="退回原因" style="margin-bottom:8px">
           <button class="btn danger" style="width:100%" type="submit">退回修改</button>
         </form>
       </div>
@@ -114,7 +111,6 @@
     <div class="card" style="margin-bottom:16px;border-color:var(--blueline,#dbeafe)">
       <div class="hd" style="background:var(--bluebg);border-radius:11px 11px 0 0"><h3 style="color:var(--blue)">待我签收</h3></div>
       <div class="bd">
-        <p class="xs dim" style="margin-top:0">签收后订单进入「{{ to_info.name }}」环节，签收时间在此记录。</p>
         <form method="post" action="/handovers/{{ h.id }}/accept">
           <input type="text" name="note" placeholder="签收备注（选填）" style="margin-bottom:8px">
           <button class="btn primary" style="width:100%" type="submit">签收</button>
@@ -125,14 +121,14 @@
 
     {% if h.status == 'pending' and not is_mgr %}
     <div class="card" style="margin-bottom:16px"><div class="bd xs dim">
-      已提交主管审批，审批通过后将通知{{ dept_name(to_info.dept) }}签收。</div></div>
+      已提交主管审批，通过后通知{{ dept_name(to_info.dept) }}签收。</div></div>
     {% endif %}
 
     {% if h.status == 'rejected' %}
     <div class="card" style="margin-bottom:16px;border-color:var(--redline)"><div class="bd">
       <div style="color:var(--red);font-weight:600;font-size:13px">已退回</div>
       <div class="xs dim" style="margin-top:4px">{{ h.approve_note }}</div>
-      <div class="xs dim" style="margin-top:6px">图档仍为草稿状态，修改后请在订单页重新提交，历史轮次记录保留。</div>
+      <div class="xs dim" style="margin-top:6px">图档仍为草稿，修改后在订单页重新提交。</div>
       <a class="btn sm" style="margin-top:8px" href="/orders/{{ o.id }}">返回订单</a>
     </div></div>
     {% endif %}
@@ -140,8 +136,8 @@
     <div class="card">
       <div class="hd"><h3>流转规则</h3></div>
       <div class="bd xs" style="color:var(--muted);line-height:1.9">
-        ① 提交时勾选的版本即被冻结，交接单有效期内不可修改<br>
-        ② 经主管审批后转为「已发布」，此前均为草稿<br>
+        ① 提交时勾选的版本即被冻结，有效期内不可修改<br>
+        ② 主管审批后转为「已发布」，此前均为草稿<br>
         ③ 下一环节签收后，订单进入下一环节<br>
         ④ 驳回不删除记录，重新提交计入第 {{ h.round + 1 }} 轮
       </div>

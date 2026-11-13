@@ -20,8 +20,7 @@
 <div class="grid g21">
   <div>
     <div class="card">
-      <div class="hd"><h3>版本历史</h3><div class="sp"></div>
-        <span class="hint">历史版本不会被覆盖，仅可新增</span></div>
+      <div class="hd"><h3>版本历史</h3><div class="sp"></div></div>
       <div class="bd">
         {% for v in vers %}
         <div class="verrow{{ ' cur' if d.current_version_id == v.id else '' }}">
@@ -50,7 +49,6 @@
                 <form method="post" action="/versions/{{ v.id }}/customer" style="margin-top:6px">
                   <input type="text" name="note" placeholder="例：微信确认，客户同意按此版本开模" style="margin-bottom:6px">
                   <button class="btn sm primary" type="submit">标记客户已确认</button>
-                  <span class="xs dim" style="margin-left:6px">主管审批不等同于客户确认，此项单独记录</span>
                 </form>
               </details>
               {% endif %}
@@ -63,8 +61,7 @@
     </div>
 
     <div class="card" style="margin-top:16px">
-      <div class="hd"><h3>上传新版本</h3><div class="sp"></div>
-        <span class="hint">上传后为草稿状态，经交接单审批后转为正式版本</span></div>
+      <div class="hd"><h3>上传新版本</h3><div class="sp"></div></div>
       <form method="post" action="/docs/{{ d.id }}/upload" enctype="multipart/form-data" class="bd">
         <div class="row">
           <div style="flex:2 1 240px"><label class="fl">文件（支持 .prt / .step / .dwg / .pdf / 图片）</label>
@@ -78,7 +75,6 @@
         <div class="field" style="margin-top:10px">
           <label class="fl">本次变更说明 *</label>
           <textarea name="change_note" placeholder="例：按 BG-0002 将 A 面改为细火花纹，其余不变。"></textarea>
-          <div class="hintline">变更原因记录于此，便于后续追溯。</div>
         </div>
         <button class="btn primary" type="submit">上传</button>
       </form>
@@ -90,9 +86,9 @@
       <div class="hd"><h3>编号信息</h3></div>
       <div class="bd">
         <form method="post" action="/docs/{{ d.id }}/update">
-          <div class="field"><label class="fl">设计编号（创建后不可修改）</label>
+          <div class="field"><label class="fl">设计编号</label>
             <input type="text" value="{{ d.design_no }}" disabled style="background:#f8fafc"></div>
-          <div class="field"><label class="fl">开模编号（由工程部填写）</label>
+          <div class="field"><label class="fl">开模编号</label>
             <input type="text" name="mold_no" value="{{ d.mold_no or '' }}" placeholder="M-2601-A"
               {{ 'disabled' if me.dept != 'engineering' and me.role not in ('manager','admin') }}></div>
           <div class="field"><label class="fl">别名 / 客户料号</label>
@@ -101,7 +97,7 @@
           {% if me.dept == 'engineering' or me.role in ('manager','admin') %}
           <button class="btn sm primary" type="submit">保存</button>
           {% else %}
-          <div class="xs dim">开模编号由工程部录入，确保编号来源可追溯。</div>
+          <div class="xs dim">开模编号由工程部录入</div>
           {% endif %}
         </form>
       </div>

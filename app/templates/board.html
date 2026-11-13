@@ -5,19 +5,19 @@
 
 <div class="page-head">
   <div>
-    <div class="t">全厂订单分布</div>
-    <div class="d">卡片所处环节即订单当前所在部门。右上角为<strong>在当前环节的停留天数</strong>，超过 7 天标记为黄色，超过 14 天标记为红色；页面较窄时可横向滚动查看七列。</div>
+    <div class="t">订单分布</div>
+    <div class="d">卡片右上角为当前环节停留天数，超 7 天黄色、超 14 天红色</div>
   </div>
   <div class="right"><a class="btn sm" href="/board">刷新</a></div>
 </div>
 
 <div class="grid kb-stats">
-  <a class="stat teal" href="/orders"><div class="k">进行中订单</div><div class="v">{{ stats.active }}</div><div class="f">{{ stats.from_sales }} 个客户</div></a>
-  <div class="stat {{ 'warn' if stats.stuck }}"><div class="k">滞留超 7 天</div><div class="v">{{ stats.stuck }}</div><div class="f">超过两周需重点跟进</div></div>
-  <a class="stat {{ 'warn' if stats.pending }}" href="/handovers"><div class="k">待主管审批</div><div class="v">{{ stats.pending }}</div><div class="f">等待主管审批</div></a>
-  <div class="stat {{ 'warn' if stats.unconfirmed }}"><div class="k">客户未确认</div><div class="v">{{ stats.unconfirmed }}</div><div class="f">已发布但未获客户确认</div></div>
-  <a class="stat {{ 'warn' if stats.nodrawing }}" href="/bom"><div class="k">缺失图档零件</div><div class="v">{{ stats.nodrawing }}</div><div class="f">BOM 已登记但未关联图档</div></a>
-  <div class="stat {{ 'warn' if stats.gate_blocked }}"><div class="k">齐套未完成</div><div class="v">{{ stats.gate_blocked }}</div><div class="f">本环节必交项还没补齐</div></div>
+  <a class="stat teal" href="/orders"><div class="k">进行中订单</div><div class="v">{{ stats.active }}</div></a>
+  <div class="stat {{ 'warn' if stats.stuck }}"><div class="k">滞留超 7 天</div><div class="v">{{ stats.stuck }}</div></div>
+  <a class="stat {{ 'warn' if stats.pending }}" href="/handovers"><div class="k">待主管审批</div><div class="v">{{ stats.pending }}</div></a>
+  <div class="stat {{ 'warn' if stats.unconfirmed }}"><div class="k">客户未确认</div><div class="v">{{ stats.unconfirmed }}</div></div>
+  <a class="stat {{ 'warn' if stats.nodrawing }}" href="/bom"><div class="k">缺图档零件</div><div class="v">{{ stats.nodrawing }}</div></a>
+  <div class="stat {{ 'warn' if stats.gate_blocked }}"><div class="k">齐套未完成</div><div class="v">{{ stats.gate_blocked }}</div></div>
 </div>
 
 <div class="kb">
@@ -59,8 +59,7 @@
 <div class="grid g2" style="margin-top:18px">
 
   <div class="card">
-    <div class="hd"><h3>滞留最久订单</h3><div class="sp"></div>
-      <span class="hint">按当前环节停留天数排序</span></div>
+    <div class="hd"><h3>滞留最久</h3><div class="sp"></div></div>
     <div class="bd" style="padding:0">
       {% if slow %}
       {% for c in slow %}
@@ -78,8 +77,7 @@
   </div>
 
   <div class="card">
-    <div class="hd"><h3>客户未确认图档</h3><div class="sp"></div>
-      <span class="hint">已发布但业务尚未登记客户确认</span></div>
+    <div class="hd"><h3>客户未确认</h3><div class="sp"></div></div>
     <div class="bd" style="padding:0">
       {% if unconfirmed %}
       {% for v in unconfirmed %}
@@ -96,7 +94,7 @@
       </div>
       {% endfor %}
       {% else %}
-      <div class="empty"><div class="big">✓</div>已发布图档均已获客户确认。</div>
+      <div class="empty"><div class="big">✓</div>已发布图档均已确认</div>
       {% endif %}
     </div>
   </div>

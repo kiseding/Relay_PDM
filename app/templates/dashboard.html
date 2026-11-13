@@ -5,10 +5,8 @@
 
 <div class="page-head">
   <div>
-    <div class="t">{{ me.name }}，以下为今日待办</div>
-    <div class="d">{{ DEPTS.get(me.dept, me.dept) }}
-      {%- if me.role == 'manager' %} · 主管，负责本部门交接单审批{% elif me.role == 'admin' %} · 管理员{% endif %}
-      · {% if me.role == 'admin' %}显示全部订单{% else %}仅显示本部门相关订单{% endif %}</div>
+    <div class="t">{{ me.name }}的待办</div>
+    <div class="d">{{ DEPTS.get(me.dept, me.dept) }} · {{ ROLE_NAMES.get(me.role, me.role) }}</div>
   </div>
   {% if me.role in ('admin', 'manager') %}
   <div class="right"><a class="btn sm primary" href="/board">查看总看板 ›</a></div>
@@ -16,16 +14,15 @@
 </div>
 
 <div class="grid g4" style="margin-bottom:18px">
-  <div class="stat teal"><div class="k">进行中订单</div><div class="v">{{ stats.orders }}</div><div class="f">不含已结案订单</div></div>
-  <div class="stat"><div class="k">图档总数</div><div class="v">{{ stats.docs }}</div><div class="f">均保留完整版本历史</div></div>
-  <div class="stat warn"><div class="k">待审批交接单</div><div class="v">{{ stats.pending }}</div><div class="f">等待主管审批</div></div>
-  <div class="stat"><div class="k">草稿版本</div><div class="v">{{ stats.draft }}</div><div class="f">尚未纳入交接单，非正式版本</div></div>
+  <div class="stat teal"><div class="k">进行中订单</div><div class="v">{{ stats.orders }}</div></div>
+  <div class="stat"><div class="k">图档总数</div><div class="v">{{ stats.docs }}</div></div>
+  <div class="stat warn"><div class="k">待审批交接单</div><div class="v">{{ stats.pending }}</div></div>
+  <div class="stat"><div class="k">草稿版本</div><div class="v">{{ stats.draft }}</div></div>
 </div>
 
 <div class="grid g21">
   <div class="card">
-    <div class="hd"><h3>我的待办</h3><div class="sp"></div>
-      <span class="hint">按紧急程度排序，处理完成后自动移除</span></div>
+    <div class="hd"><h3>我的待办</h3><div class="sp"></div></div>
     <div class="bd" style="padding:0">
 
       {% if todo_approve %}
@@ -53,7 +50,7 @@
           <div class="todo-main"><b>{{ o.product_name }}</b>
             <span class="xs dim">{{ o.code }}</span></div>
           <div class="todo-sub"><a href="/handovers/{{ o.ho.id }}" class="mono">{{ o.ho.code }}</a>
-            · 上一环节 {{ stage(o.ho.from_stage).name }} 已审批，签收后进入本环节</div>
+            · {{ stage(o.ho.from_stage).name }} 已审批</div>
         </div>
         <a class="btn sm primary" href="/handovers/{{ o.ho.id }}">签收</a>
       </div>
@@ -76,7 +73,7 @@
       {% endif %}
 
       {% if not (todo_approve or todo_accept or todo_submit) %}
-      <div class="empty"><div class="big">✓</div>暂无待办事项<br><span class="xs">其他环节推进时，此处将显示提醒。</span></div>
+      <div class="empty"><div class="big">✓</div>暂无待办事项</div>
       {% endif %}
     </div>
   </div>
